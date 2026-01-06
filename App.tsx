@@ -93,6 +93,8 @@ export default function App() {
   const [editingBlockIndex, setEditingBlockIndex] = useState<number | null>(null);
   const [rewriteFeedback, setRewriteFeedback] = useState("");
   const [isRewriting, setIsRewriting] = useState(false);
+  const [rewriteScope, setRewriteScope] = useState<'single' | 'all'>('single');
+  const [rewriteProgress, setRewriteProgress] = useState<{current: number, total: number} | null>(null);
 
   // -- API Keys --
   const [apiKeyGemini, setApiKeyGemini] = useState("");
@@ -404,35 +406,74 @@ export default function App() {
 
   // --- REWRITE LOGIC ---
   const openRewriteModal = (index: number) => {
+    setRewriteScope('single');
     setEditingBlockIndex(index);
     setRewriteFeedback("");
     setIsRewriteModalOpen(true);
   };
 
-  const handleRewriteStoryBlock = async () => {
-    if (editingBlockIndex === null || !rewriteFeedback.trim()) return;
+  const openRewriteAllModal = () => {
+    setRewriteScope('all');
+    setEditingBlockIndex(null);
+    setRewriteFeedback("");
+    setIsRewriteModalOpen(true);
+  };
+
+  const handleRewriteSubmit = async () => {
+    if (!rewriteFeedback.trim()) return;
     
     setIsRewriting(true);
+    setError(null);
+
     try {
-        const originalBlock = storyBlocks[editingBlockIndex];
-        const newContent = await geminiService.rewriteStoryBlock(
-            originalBlock.content,
-            rewriteFeedback,
-            storyMetadata,
-            language,
-            selectedModel,
-            apiKeyGemini
-        );
+        if (rewriteScope === 'single' && editingBlockIndex !== null) {
+            const originalBlock = storyBlocks[editingBlockIndex];
+            const newContent = await geminiService.rewriteStoryBlock(
+                originalBlock.content,
+                rewriteFeedback,
+                storyMetadata,
+                language,
+                selectedModel,
+                apiKeyGemini
+            );
 
-        setStoryBlocks(prev => {
-            const updated = [...prev];
-            updated[editingBlockIndex] = { ...updated[editingBlockIndex], content: newContent };
-            return updated;
-        });
-
-        setToastMessage("Đã viết lại đoạn truyện thành công!");
-        // Keep modal open so user can rewrite again if needed, or close it? 
-        // Better UX: Keep open but clear feedback or show success? Let's just finish loading.
+            setStoryBlocks(prev => {
+                const updated = [...prev];
+                updated[editingBlockIndex] = { ...updated[editingBlockIndex], content: newContent };
+                return updated;
+            });
+            setToastMessage("Đã viết lại đoạn truyện thành công!");
+        } else if (rewriteScope === 'all') {
+             setRewriteProgress({ current: 0, total: storyBlocks.length });
+             
+             // Process sequentially to ensure stability
+             for (let i = 0; i < storyBlocks.length; i++) {
+                 try {
+                    const block = storyBlocks[i];
+                    const newContent = await geminiService.rewriteStoryBlock(
+                        block.content,
+                        rewriteFeedback,
+                        storyMetadata,
+                        language,
+                        selectedModel,
+                        apiKeyGemini
+                    );
+                    
+                    setStoryBlocks(prev => {
+                        const updated = [...prev];
+                        updated[i] = { ...updated[i], content: newContent };
+                        return updated;
+                    });
+                    
+                    setRewriteProgress({ current: i + 1, total: storyBlocks.length });
+                 } catch (e) {
+                     console.error(`Error rewriting block ${i}`, e);
+                     // Continue to next block even if one fails
+                 }
+             }
+             setToastMessage("Đã hoàn tất viết lại toàn bộ truyện.");
+             setRewriteProgress(null);
+        }
     } catch (err) {
         console.error("Rewrite error", err);
         setError(`Lỗi khi viết lại: ${err instanceof Error ? err.message : String(err)}`);
@@ -681,6 +722,7 @@ export default function App() {
 
           <Card title="4) Nội dung Truyện" actions={
             <div className="flex gap-2">
+               <ThemedButton onClick={openRewriteAllModal} disabled={loading.story || storyBlocks.length === 0} className="text-xs px-2 py-1 h-8 bg-sky-700/40 border-sky-600/50 hover:bg-sky-600/60">Sửa / Viết lại</ThemedButton>
                <ThemedButton onClick={handleGenerateStory} disabled={loading.story || isStoryUploaded} className="text-xs px-2 py-1 h-8">Viết Truyện</ThemedButton>
                <ThemedButton onClick={exportStoryCSV} disabled={storyBlocks.length === 0} className="text-xs px-2 py-1 h-8">Tải CSV</ThemedButton>
             </div>
@@ -699,7 +741,7 @@ export default function App() {
                                 title="Viết lại đoạn này"
                              >
                                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                                Sửa / Viết lại
+                                Sửa
                              </button>
                          </div>
                          <p className="whitespace-pre-wrap leading-relaxed opacity-90 text-sm">{b.content}</p>
@@ -860,47 +902,59 @@ export default function App() {
         title="Phản hồi & Viết lại nội dung"
       >
          <div className="space-y-4">
-             {editingBlockIndex !== null && storyBlocks[editingBlockIndex] && (
-                 <>
-                    <div className={`p-3 rounded-lg ${theme.subtleBg} border ${theme.border} max-h-[200px] overflow-y-auto text-sm opacity-80`}>
-                        <div className="font-bold text-xs mb-1 uppercase opacity-60">Nội dung gốc:</div>
-                        {storyBlocks[editingBlockIndex].content}
-                    </div>
+             {rewriteScope === 'single' && editingBlockIndex !== null && storyBlocks[editingBlockIndex] && (
+                 <div className={`p-3 rounded-lg ${theme.subtleBg} border ${theme.border} max-h-[200px] overflow-y-auto text-sm opacity-80`}>
+                    <div className="font-bold text-xs mb-1 uppercase opacity-60">Nội dung gốc:</div>
+                    {storyBlocks[editingBlockIndex].content}
+                 </div>
+             )}
+             
+             {rewriteScope === 'all' && (
+                 <div className={`p-3 rounded-lg ${theme.subtleBg} border ${theme.border} text-sm text-sky-200`}>
+                    <div className="font-bold text-xs mb-1 uppercase opacity-60">Phạm vi tác động:</div>
+                    Bạn đang yêu cầu sửa đổi/viết lại toàn bộ <b>{storyBlocks.length}</b> chương truyện hiện có. 
+                    AI sẽ xử lý lần lượt từng chương dựa trên yêu cầu của bạn.
+                 </div>
+             )}
 
-                    <div>
-                        <label className={`block text-sm font-medium ${theme.textAccent} mb-2`}>
-                            Yêu cầu sửa đổi / Viết lại
-                            <Tooltip text="Nhập hướng dẫn cụ thể cho AI. Ví dụ: 'Viết buồn hơn', 'Đổi tên A thành B', 'Thêm chi tiết trời mưa'..." />
-                        </label>
-                        <textarea
-                            value={rewriteFeedback}
-                            onChange={(e) => setRewriteFeedback(e.target.value)}
-                            placeholder="Nhập yêu cầu của bạn tại đây..."
-                            className={`w-full rounded-lg ${theme.bgCard}/70 border ${theme.border} p-3 outline-none focus:ring-2 ${theme.ring} min-h-[120px] text-sm`}
-                        />
-                    </div>
+             <div>
+                <label className={`block text-sm font-medium ${theme.textAccent} mb-2`}>
+                    Yêu cầu sửa đổi / Viết lại
+                    <Tooltip text="Nhập hướng dẫn cụ thể cho AI. Ví dụ: 'Viết buồn hơn', 'Đổi tên A thành B', 'Thêm chi tiết trời mưa'..." />
+                </label>
+                <textarea
+                    value={rewriteFeedback}
+                    onChange={(e) => setRewriteFeedback(e.target.value)}
+                    placeholder="Nhập yêu cầu của bạn tại đây..."
+                    className={`w-full rounded-lg ${theme.bgCard}/70 border ${theme.border} p-3 outline-none focus:ring-2 ${theme.ring} min-h-[120px] text-sm`}
+                />
+             </div>
 
-                    <div className="flex gap-3 pt-2">
-                        <button 
-                            onClick={handleRewriteStoryBlock}
-                            disabled={isRewriting || !rewriteFeedback.trim()}
-                            className={`flex-1 py-2 rounded-lg font-semibold ${theme.buttonPrimary} text-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2`}
-                        >
-                            {isRewriting ? (
-                                <>
-                                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                                    Đang viết lại...
-                                </>
-                            ) : "Viết lại ngay"}
-                        </button>
-                         <button 
-                            onClick={() => setIsRewriteModalOpen(false)}
-                            className={`px-4 py-2 rounded-lg font-semibold border ${theme.borderLight} hover:bg-white/10`}
-                        >
-                            Đóng
-                        </button>
-                    </div>
-                 </>
+             <div className="flex gap-3 pt-2">
+                <button 
+                    onClick={handleRewriteSubmit}
+                    disabled={isRewriting || !rewriteFeedback.trim()}
+                    className={`flex-1 py-2 rounded-lg font-semibold ${theme.buttonPrimary} text-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2`}
+                >
+                    {isRewriting ? (
+                        <>
+                            <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            {rewriteScope === 'all' ? "Đang viết lại toàn bộ..." : "Đang viết lại..."}
+                        </>
+                    ) : (rewriteScope === 'all' ? "Viết lại toàn bộ truyện" : "Viết lại chương này")}
+                </button>
+                 <button 
+                    onClick={() => setIsRewriteModalOpen(false)}
+                    className={`px-4 py-2 rounded-lg font-semibold border ${theme.borderLight} hover:bg-white/10`}
+                >
+                    Đóng
+                </button>
+             </div>
+             
+             {isRewriting && rewriteScope === 'all' && rewriteProgress && (
+               <div className="mt-2 text-xs text-center opacity-80 animate-pulse">
+                  Đang xử lý chương: <b>{rewriteProgress.current}</b> / {rewriteProgress.total}
+               </div>
              )}
          </div>
       </Modal>
@@ -990,7 +1044,7 @@ export default function App() {
                   <div className="font-semibold text-base mb-1">Viết chi tiết & Chỉnh sửa</div>
                   <ul className="list-disc list-inside opacity-80 space-y-1">
                     <li>Nếu dùng Cách 1 (Tạo sườn): Nhấn <b>Viết Truyện (Theo sườn)</b>. AI sẽ viết chi tiết từng chương.</li>
-                    <li><b>Tính năng mới:</b> Tại mục ""Nội dung truyện"", bạn có thể bấm nút <b>Sửa / Viết lại</b> ở từng chương. Nhập yêu cầu (VD: ""Viết buồn hơn"", ""Đổi tên nhân vật"") và AI sẽ viết lại đoạn đó.</li>
+                    <li><b>Tính năng mới:</b> Tại mục ""Nội dung truyện"", bạn có thể bấm nút <b>Sửa / Viết lại</b> để chỉnh sửa toàn bộ hoặc từng chương theo ý muốn.</li>
                   </ul>
                 </div>
               </div>

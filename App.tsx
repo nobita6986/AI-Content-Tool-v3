@@ -6,7 +6,7 @@ import { Card, Empty, LoadingOverlay, Modal, Toast, Tooltip } from './components
 
 // --- CONFIGURATION & THEMES ---
 
-type ThemeColor = 'sky' | 'rose' | 'violet' | 'amber' | 'emerald' | 'cyan';
+type ThemeColor = 'sky' | 'rose' | 'violet' | 'amber' | 'emerald' | 'cyan' | 'orange' | 'fuchsia' | 'indigo' | 'teal' | 'lime' | 'pink';
 
 const THEME_PRESETS: Record<ThemeColor, { name: string; labelEn: string; hex: string; bgGradient: string }> = {
   sky: { 
@@ -33,10 +33,53 @@ const THEME_PRESETS: Record<ThemeColor, { name: string; labelEn: string; hex: st
     name: 'Lam', labelEn: 'Cyan', hex: '#06b6d4', 
     bgGradient: "bg-[radial-gradient(1200px_700px_at_50%_0%,#164e63_0%,#020617_60%,#000000_100%)]" 
   },
+  orange: { 
+    name: 'Cam', labelEn: 'Orange', hex: '#f97316', 
+    bgGradient: "bg-[radial-gradient(1200px_700px_at_50%_0%,#431407_0%,#020617_60%,#000000_100%)]" 
+  },
+  fuchsia: { 
+    name: 'Hồng Tím', labelEn: 'Fuchsia', hex: '#d946ef', 
+    bgGradient: "bg-[radial-gradient(1200px_700px_at_50%_0%,#4a044e_0%,#020617_60%,#000000_100%)]" 
+  },
+  indigo: { 
+    name: 'Chàm', labelEn: 'Indigo', hex: '#6366f1', 
+    bgGradient: "bg-[radial-gradient(1200px_700px_at_50%_0%,#1e1b4b_0%,#020617_60%,#000000_100%)]" 
+  },
+  teal: { 
+    name: 'Xanh Mòng Két', labelEn: 'Teal', hex: '#14b8a6', 
+    bgGradient: "bg-[radial-gradient(1200px_700px_at_50%_0%,#134e4a_0%,#020617_60%,#000000_100%)]" 
+  },
+  lime: { 
+    name: 'Xanh Chuối', labelEn: 'Lime', hex: '#84cc16', 
+    bgGradient: "bg-[radial-gradient(1200px_700px_at_50%_0%,#365314_0%,#020617_60%,#000000_100%)]" 
+  },
+  pink: { 
+    name: 'Hồng', labelEn: 'Pink', hex: '#ec4899', 
+    bgGradient: "bg-[radial-gradient(1200px_700px_at_50%_0%,#500724_0%,#020617_60%,#000000_100%)]" 
+  },
 };
 
 const getThemeStyles = (color: ThemeColor) => {
   const preset = THEME_PRESETS[color];
+  // Helper to map complex colors to tailwind safe gradients
+  const getGradientTo = () => {
+      switch(color) {
+          case 'sky': return 'blue-500';
+          case 'emerald': return 'teal-500';
+          case 'rose': return 'red-500';
+          case 'violet': return 'purple-500';
+          case 'amber': return 'yellow-500';
+          case 'cyan': return 'blue-400';
+          case 'orange': return 'red-500';
+          case 'fuchsia': return 'pink-500';
+          case 'indigo': return 'blue-600';
+          case 'teal': return 'emerald-500';
+          case 'lime': return 'green-500';
+          case 'pink': return 'rose-500';
+          default: return 'blue-500';
+      }
+  };
+
   return {
     bg: preset.bgGradient,
     textMain: `text-${color}-50`,
@@ -48,7 +91,7 @@ const getThemeStyles = (color: ThemeColor) => {
     bgButton: `bg-${color}-900/40`,
     bgButtonHover: `hover:bg-${color}-900/60`,
     ring: `ring-${color}-500`,
-    gradientTitle: `from-${color}-400 to-${color === 'sky' ? 'blue' : color === 'rose' ? 'red' : color === 'emerald' ? 'teal' : color === 'violet' ? 'purple' : color === 'amber' ? 'yellow' : 'cyan'}-500`,
+    gradientTitle: `from-${color}-400 to-${getGradientTo()}`,
     iconColor: `text-${color}-300`,
     buttonPrimary: `bg-${color}-700/50 hover:bg-${color}-600/50`,
     subtleBg: `bg-${color}-900/20`,
@@ -97,7 +140,10 @@ export default function App() {
   // -- Modals --
   const [isApiModalOpen, setIsApiModalOpen] = useState(false);
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
-  const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
+  
+  // Replace Modal state with Dropdown state
+  const [isThemeDropdownOpen, setIsThemeDropdownOpen] = useState(false);
+
   const [activeGuideTab, setActiveGuideTab] = useState<'strengths' | 'guide'>('strengths');
   const [isExtraConfigModalOpen, setIsExtraConfigModalOpen] = useState(false);
   const [isLibraryModalOpen, setIsLibraryModalOpen] = useState(false);
@@ -209,7 +255,7 @@ export default function App() {
   const handleSelectTheme = (color: ThemeColor) => {
     setThemeColor(color);
     localStorage.setItem("nd_theme_color", color);
-    setIsThemeModalOpen(false);
+    setIsThemeDropdownOpen(false);
   };
 
   // Switch language and randomize theme
@@ -679,14 +725,37 @@ export default function App() {
                   </div>
               </button>
               
-               {/* Theme Button */}
-               <button 
-                onClick={() => setIsThemeModalOpen(true)}
-                className={`flex items-center justify-center w-10 h-10 rounded-full ${theme.bgCard}/80 border ${theme.borderLight} ${theme.textAccent} text-sm font-medium hover:${theme.bgButton} hover:text-white transition shadow-lg`}
-                title="Đổi giao diện / Change Theme"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
-              </button>
+               {/* Theme Button Dropdown */}
+               <div className="relative">
+                 <button 
+                  onClick={() => setIsThemeDropdownOpen(!isThemeDropdownOpen)}
+                  className={`flex items-center justify-center w-10 h-10 rounded-full ${theme.bgCard}/80 border ${theme.borderLight} ${theme.textAccent} text-sm font-medium hover:${theme.bgButton} hover:text-white transition shadow-lg`}
+                  title="Đổi giao diện / Change Theme"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
+                </button>
+                {isThemeDropdownOpen && (
+                  <div className={`absolute top-full right-0 mt-2 w-48 rounded-xl border ${theme.borderLight} bg-slate-900 shadow-2xl z-50 overflow-hidden`}>
+                     <div className="p-1 max-h-80 overflow-y-auto space-y-1">
+                        {(Object.keys(THEME_PRESETS) as ThemeColor[]).map((color) => {
+                            const preset = THEME_PRESETS[color];
+                            const isSelected = themeColor === color;
+                            return (
+                                <button
+                                    key={color}
+                                    onClick={() => handleSelectTheme(color)}
+                                    className={`w-full text-left px-3 py-2 text-sm rounded-lg flex items-center gap-2 transition ${isSelected ? `${theme.bgButton} text-white` : 'text-slate-300 hover:bg-slate-800'}`}
+                                >
+                                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: preset.hex }}></div>
+                                    <span className="flex-1">{preset.name}</span>
+                                    {isSelected && <svg className="w-3 h-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
+                                </button>
+                            );
+                        })}
+                     </div>
+                  </div>
+                )}
+               </div>
 
               {/* Library Button */}
               <button 
@@ -1132,33 +1201,6 @@ export default function App() {
                  </ThemedButton>
              </div>
          </div>
-      </Modal>
-
-      <Modal isOpen={isThemeModalOpen} onClose={() => setIsThemeModalOpen(false)} title="Chọn giao diện (Select Theme)">
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-           {(Object.keys(THEME_PRESETS) as ThemeColor[]).map((color) => {
-             const preset = THEME_PRESETS[color];
-             const isSelected = themeColor === color;
-             return (
-               <button 
-                  key={color}
-                  onClick={() => handleSelectTheme(color)}
-                  className={`relative p-4 rounded-xl border-2 transition-all hover:scale-105 flex flex-col items-center gap-2 group ${isSelected ? `border-${color}-400 bg-slate-800` : `border-slate-800 bg-slate-900 hover:border-${color}-700`}`}
-               >
-                  <div className={`w-12 h-12 rounded-full shadow-lg ${preset.bgGradient} border border-white/10`}></div>
-                  <div className="text-center">
-                    <div className={`font-semibold text-sm ${isSelected ? `text-${color}-300` : 'text-slate-300 group-hover:text-white'}`}>{preset.name}</div>
-                    <div className="text-xs text-slate-500">{preset.labelEn}</div>
-                  </div>
-                  {isSelected && (
-                    <div className={`absolute top-2 right-2 w-5 h-5 bg-${color}-500 rounded-full flex items-center justify-center text-black`}>
-                       <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                    </div>
-                  )}
-               </button>
-             );
-           })}
-        </div>
       </Modal>
 
       {toastMessage && <Toast message={toastMessage} onClose={() => setToastMessage(null)} />}

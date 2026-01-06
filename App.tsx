@@ -231,6 +231,40 @@ export default function App() {
     };
   }, [bookTitle, bookIdea, bookImage, durationMin, isAutoDuration, calculatedChapters, frameRatio, outline, storyMetadata, storyBlocks, scriptBlocks, seo, videoPrompts, thumbTextIdeas, language, sessionId]);
 
+  // HELPER: Force update session immediately (skip debounce)
+  // Useful for real-time saving during batch processes like Rewrite
+  const updateCurrentSessionImmediate = (newStoryBlocks: StoryBlock[]) => {
+      const currentId = sessionId || crypto.randomUUID();
+      if (!sessionId) setSessionId(currentId);
+
+      const newSession: SavedSession = {
+          id: currentId,
+          lastModified: Date.now(),
+          bookTitle,
+          language,
+          bookIdea,
+          bookImage,
+          durationMin,
+          isAutoDuration,
+          chaptersCount: calculatedChapters,
+          frameRatio,
+          storyMetadata,
+          outline,
+          storyBlocks: newStoryBlocks,
+          scriptBlocks,
+          seo,
+          videoPrompts,
+          thumbTextIdeas
+      };
+
+      setSessions(prev => {
+          const filtered = prev.filter(s => s.id !== currentId);
+          const updated = [newSession, ...filtered];
+          localStorage.setItem("nd_sessions", JSON.stringify(updated));
+          return updated;
+      });
+  };
+
   const handleLoadSession = (s: SavedSession) => {
       setSessionId(s.id);
       setBookTitle(s.bookTitle);
@@ -451,6 +485,10 @@ export default function App() {
             setStoryBlocks(prev => {
                 const updated = [...prev];
                 updated[editingBlockIndex] = { ...updated[editingBlockIndex], content: newContent };
+                
+                // Call immediate save here to ensure library is updated
+                updateCurrentSessionImmediate(updated);
+                
                 return updated;
             });
             // Mark as rewritten
@@ -460,6 +498,9 @@ export default function App() {
              setRewriteProgress({ current: 0, total: storyBlocks.length });
              setRewrittenIndices(new Set()); // Clear old highlights when starting new batch
              
+             // Maintain a local copy of blocks to persist progress accumulatively
+             const runningBlocks = [...storyBlocks];
+
              // Process sequentially to ensure stability
              for (let i = 0; i < storyBlocks.length; i++) {
                  try {
@@ -473,11 +514,13 @@ export default function App() {
                         apiKeyGemini
                     );
                     
-                    setStoryBlocks(prev => {
-                        const updated = [...prev];
-                        updated[i] = { ...updated[i], content: newContent };
-                        return updated;
-                    });
+                    // Update running accumulator
+                    runningBlocks[i] = { ...runningBlocks[i], content: newContent };
+
+                    setStoryBlocks([...runningBlocks]);
+                    
+                    // IMMEDIATE SESSION UPDATE
+                    updateCurrentSessionImmediate(runningBlocks);
 
                     // Update indices set to highlight UI immediately
                     setRewrittenIndices(prev => new Set(prev).add(i));

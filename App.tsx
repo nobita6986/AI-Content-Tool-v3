@@ -806,11 +806,11 @@ export default function App() {
                 <h4 className={`font-bold text-lg mb-2 ${theme.textAccent}`}>Tính Năng Nổi Bật</h4>
                 <ul className="list-disc list-inside space-y-2 opacity-90">
                   <li><b>Thư viện tự động:</b> Mọi thao tác được tự động lưu sau mỗi thay đổi. Bạn có thể đóng tab trình duyệt và mở lại sau để tiếp tục làm việc mà không sợ mất dữ liệu.</li>
-                  <li><b>Tự động hóa toàn diện:</b> Chỉ cần nhập tên sách, AI sẽ lo từ A-Z: Lên sườn ý tưởng -> Viết nội dung chi tiết -> Chuyển thể kịch bản MC -> Tối ưu SEO -> Gợi ý Prompt hình ảnh.</li>
+                  <li><b>Tự động hóa toàn diện:</b> Chỉ cần nhập tên sách, AI sẽ lo từ A-Z: Lên sườn ý tưởng &rarr; Viết nội dung chi tiết &rarr; Chuyển thể kịch bản MC &rarr; Tối ưu SEO &rarr; Gợi ý Prompt hình ảnh.</li>
                   <li><b>Linh hoạt đầu vào:</b> 
                     <ul className="list-[circle] list-inside ml-5 mt-1 text-xs opacity-80">
-                       <li>Chưa có gì? -> Dùng tính năng <b>Tạo sườn</b>.</li>
-                       <li>Đã có file truyện .txt? -> Dùng tính năng <b>Upload</b> để AI viết kịch bản review ngay lập tức.</li>
+                       <li>Chưa có gì? &rarr; Dùng tính năng <b>Tạo sườn</b>.</li>
+                       <li>Đã có file truyện .txt? &rarr; Dùng tính năng <b>Upload</b> để AI viết kịch bản review ngay lập tức.</li>
                     </ul>
                   </li>
                   <li><b>Đa thị trường:</b> Hỗ trợ làm content cho cả Việt Nam và Global (US). Cấu hình tên Kênh/MC tự động chuyển đổi theo ngôn ngữ bạn chọn.</li>

@@ -212,6 +212,23 @@ export default function App() {
     setIsThemeModalOpen(false);
   };
 
+  // Switch language and randomize theme
+  const toggleLanguage = () => {
+    setLanguage(prev => {
+        const newLang = prev === 'vi' ? 'en' : 'vi';
+        
+        // Randomly pick a new color different from current
+        const allColors = Object.keys(THEME_PRESETS) as ThemeColor[];
+        const availableColors = allColors.filter(c => c !== themeColor);
+        const randomColor = availableColors[Math.floor(Math.random() * availableColors.length)];
+        
+        setThemeColor(randomColor);
+        localStorage.setItem("nd_theme_color", randomColor);
+        
+        return newLang;
+    });
+  };
+
   // --- SESSION & AUTO-SAVE LOGIC ---
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -596,6 +613,12 @@ export default function App() {
     const rows = [["STT", "Chương", "Review Script"], ...scriptBlocks.map(b => [String(b.index), b.chapter, b.text])];
     downloadCSV(`review_${geminiService.slugify(bookTitle)}.csv`, rows);
   };
+  
+  const exportScriptTXT = () => {
+    if (!scriptBlocks.length) return;
+    const content = scriptBlocks.map(b => `${b.chapter.toUpperCase()} [${b.chars} chars]\n\n${b.text}`).join("\n\n" + "-".repeat(40) + "\n\n");
+    downloadTXT(`review_${geminiService.slugify(bookTitle)}.txt`, content);
+  };
 
   const exportStoryCSV = () => {
     if (!storyBlocks.length) return;
@@ -640,7 +663,7 @@ export default function App() {
           <div className="flex items-center gap-3">
               {/* Language Toggle */}
               <button
-                onClick={() => setLanguage(prev => prev === 'vi' ? 'en' : 'vi')}
+                onClick={toggleLanguage}
                 className={`relative w-16 h-8 rounded-full border ${theme.borderLight} ${theme.bgCard} flex items-center transition-all hover:opacity-90 shadow-inner`}
                 title="Click để đổi ngôn ngữ / Click to switch language"
               >
@@ -891,7 +914,10 @@ export default function App() {
           </Card>
 
           <Card title="5) Review Script (Kịch bản Audio)" actions={
-              <ThemedButton onClick={exportScriptCSV} disabled={scriptBlocks.length === 0} className="text-xs px-2 py-1 h-8">Tải CSV</ThemedButton>
+             <div className="flex gap-2">
+               <ThemedButton onClick={exportScriptCSV} disabled={scriptBlocks.length === 0} className="text-xs px-2 py-1 h-8">Tải CSV</ThemedButton>
+               <ThemedButton onClick={exportScriptTXT} disabled={scriptBlocks.length === 0} className="text-xs px-2 py-1 h-8">Tải TXT</ThemedButton>
+             </div>
           }>
             <div className="relative">
                 {loading.script && <LoadingOverlay />}

@@ -1,4 +1,3 @@
-
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { OutlineItem, ScriptBlock, StoryBlock, SEOResult, LoadingStates, Language, SavedSession, StoryMetadata } from './types';
 import * as geminiService from './services/geminiService';
@@ -613,20 +612,22 @@ export default function App() {
           
           <div className="flex items-center gap-3">
               {/* Language Toggle */}
-              <div className={`flex items-center p-1 rounded-full ${theme.bgCard} border ${theme.borderLight}`}>
-                  <button 
-                    onClick={() => setLanguage('vi')}
-                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${language === 'vi' ? theme.badge + ' text-white' : 'text-slate-400 hover:text-white'}`}
-                  >
-                    VN
-                  </button>
-                  <button 
-                     onClick={() => setLanguage('en')}
-                     className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${language === 'en' ? theme.badge + ' text-white' : 'text-slate-400 hover:text-white'}`}
-                  >
-                    US
-                  </button>
-              </div>
+              <button
+                onClick={() => setLanguage(prev => prev === 'vi' ? 'en' : 'vi')}
+                className={`relative w-16 h-8 rounded-full border ${theme.borderLight} ${theme.bgCard} flex items-center transition-all hover:opacity-90 shadow-inner`}
+                title="Click để đổi ngôn ngữ / Click to switch language"
+              >
+                  {/* Background labels */}
+                  <span className={`absolute left-2 text-[9px] font-bold ${language === 'vi' ? 'opacity-0' : 'opacity-60 text-slate-400'}`}>VN</span>
+                  <span className={`absolute right-2 text-[9px] font-bold ${language === 'en' ? 'opacity-0' : 'opacity-60 text-slate-400'}`}>US</span>
+                  
+                  {/* Sliding Knob */}
+                  <div className={`absolute left-1 w-6 h-6 rounded-full shadow-lg flex items-center justify-center text-[10px] font-bold text-white transition-all duration-300 transform ${
+                      language === 'en' ? 'translate-x-8' : 'translate-x-0'
+                  } ${language === 'vi' ? 'bg-sky-600 shadow-[0_0_8px_rgba(2,132,199,0.6)]' : 'bg-emerald-600 shadow-[0_0_8px_rgba(5,150,105,0.6)]'}`}>
+                    {language === 'vi' ? 'VN' : 'US'}
+                  </div>
+              </button>
 
               {/* Library Button */}
               <button 

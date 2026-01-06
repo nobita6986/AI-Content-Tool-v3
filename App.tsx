@@ -487,7 +487,7 @@ export default function App() {
         calculatedChapters, 
         durationMin, 
         language, 
-        storyMode,
+        storyMode, 
         storyGenre,
         isAutoDuration, 
         selectedModel, 
@@ -1023,7 +1023,7 @@ export default function App() {
                <ThemedButton 
                   onClick={() => {
                       setIsEvaluationModalOpen(true);
-                      if (!evaluationResult) {
+                      if (!evaluationResult && !isStoryUploaded) {
                          handleEvaluateStory(storyMode === 'romance' ? 'romance' : 'general');
                       }
                   }}
@@ -1308,32 +1308,58 @@ export default function App() {
                           <span className="animate-pulse">Đang thẩm định tác phẩm... (Có thể mất 30-60s)</span>
                       </div>
                   ) : (
-                      <div className="flex justify-center px-4">
-                          <button 
-                              onClick={() => handleEvaluateStory(storyMode === 'romance' ? 'romance' : 'general')}
-                              className={`p-6 rounded-xl w-full border transition group flex flex-col items-center gap-3 ${
-                                  storyMode === 'romance' 
-                                  ? 'bg-pink-900/30 border-pink-700/50 hover:bg-pink-900/50 hover:border-pink-500' 
-                                  : 'bg-blue-900/30 border-blue-700/50 hover:bg-blue-900/50 hover:border-blue-500'
-                              }`}
-                          >
-                              <div className={`w-12 h-12 rounded-full flex items-center justify-center transition group-hover:scale-110 ${
-                                  storyMode === 'romance' ? 'bg-pink-600/20 text-pink-400' : 'bg-blue-600/20 text-blue-400'
-                              }`}>
-                                {storyMode === 'romance' ? (
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
-                                ) : (
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
-                                )}
-                              </div>
-                              <div className={`font-bold ${storyMode === 'romance' ? 'text-pink-200' : 'text-blue-200'}`}>
-                                  {storyMode === 'romance' ? 'Bắt đầu chấm điểm Ngôn Tình' : 'Bắt đầu chấm điểm Kịch bản'}
-                              </div>
-                              <div className={`text-xs ${storyMode === 'romance' ? 'text-pink-300/60' : 'text-blue-300/60'}`}>
-                                  {storyMode === 'romance' ? 'Tiêu chí: Hook, Chemistry, Cẩu huyết, Sảng văn...' : 'Tiêu chí: Cấu trúc, Logic, Giọng văn, Ý tưởng...'}
-                              </div>
-                          </button>
-                      </div>
+                      isStoryUploaded ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-4">
+                           <button 
+                               onClick={() => handleEvaluateStory('romance')}
+                               className="p-6 rounded-xl bg-pink-900/30 border border-pink-700/50 hover:bg-pink-900/50 hover:border-pink-500 transition group flex flex-col items-center gap-3"
+                           >
+                               <div className="w-12 h-12 rounded-full bg-pink-600/20 flex items-center justify-center text-pink-400 group-hover:scale-110 transition">
+                                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+                               </div>
+                               <div className="font-bold text-pink-200">Chấm điểm Ngôn Tình</div>
+                               <div className="text-xs text-pink-300/60">Tiêu chí: Hook, Chemistry, Cẩu huyết, Sảng văn...</div>
+                           </button>
+
+                           <button 
+                               onClick={() => handleEvaluateStory('general')}
+                               className="p-6 rounded-xl bg-blue-900/30 border border-blue-700/50 hover:bg-blue-900/50 hover:border-blue-500 transition group flex flex-col items-center gap-3"
+                           >
+                                <div className="w-12 h-12 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-400 group-hover:scale-110 transition">
+                                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+                               </div>
+                               <div className="font-bold text-blue-200">Chấm điểm Kịch bản</div>
+                               <div className="text-xs text-blue-300/60">Tiêu chí: Cấu trúc, Logic, Giọng văn, Ý tưởng...</div>
+                           </button>
+                        </div>
+                      ) : (
+                        <div className="flex justify-center px-4">
+                            <button 
+                                onClick={() => handleEvaluateStory(storyMode === 'romance' ? 'romance' : 'general')}
+                                className={`p-6 rounded-xl w-full border transition group flex flex-col items-center gap-3 ${
+                                    storyMode === 'romance' 
+                                    ? 'bg-pink-900/30 border-pink-700/50 hover:bg-pink-900/50 hover:border-pink-500' 
+                                    : 'bg-blue-900/30 border-blue-700/50 hover:bg-blue-900/50 hover:border-blue-500'
+                                }`}
+                            >
+                                <div className={`w-12 h-12 rounded-full flex items-center justify-center transition group-hover:scale-110 ${
+                                    storyMode === 'romance' ? 'bg-pink-600/20 text-pink-400' : 'bg-blue-600/20 text-blue-400'
+                                }`}>
+                                  {storyMode === 'romance' ? (
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+                                  ) : (
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+                                  )}
+                                </div>
+                                <div className={`font-bold ${storyMode === 'romance' ? 'text-pink-200' : 'text-blue-200'}`}>
+                                    {storyMode === 'romance' ? 'Bắt đầu chấm điểm Ngôn Tình' : 'Bắt đầu chấm điểm Kịch bản'}
+                                </div>
+                                <div className={`text-xs ${storyMode === 'romance' ? 'text-pink-300/60' : 'text-blue-300/60'}`}>
+                                    {storyMode === 'romance' ? 'Tiêu chí: Hook, Chemistry, Cẩu huyết, Sảng văn...' : 'Tiêu chí: Cấu trúc, Logic, Giọng văn, Ý tưởng...'}
+                                </div>
+                            </button>
+                        </div>
+                      )
                   )}
               </div>
           ) : (

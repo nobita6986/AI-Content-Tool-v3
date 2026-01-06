@@ -95,6 +95,8 @@ export default function App() {
   const [isRewriting, setIsRewriting] = useState(false);
   const [rewriteScope, setRewriteScope] = useState<'single' | 'all'>('single');
   const [rewriteProgress, setRewriteProgress] = useState<{current: number, total: number} | null>(null);
+  // Track indices of blocks that have been rewritten to highlight them
+  const [rewrittenIndices, setRewrittenIndices] = useState<Set<number>>(new Set());
 
   // -- API Keys --
   const [apiKeyGemini, setApiKeyGemini] = useState("");
@@ -245,6 +247,7 @@ export default function App() {
       setSeo(s.seo);
       setVideoPrompts(s.videoPrompts || []);
       setThumbTextIdeas(s.thumbTextIdeas || []);
+      setRewrittenIndices(new Set()); // Clear highlights on load
       
       setIsLibraryModalOpen(false);
       setToastMessage(`Đã tải lại phiên làm việc: "${s.bookTitle}"`);
@@ -274,6 +277,7 @@ export default function App() {
       setVideoPrompts([]);
       setThumbTextIdeas([]);
       setIsAutoDuration(false);
+      setRewrittenIndices(new Set()); // Clear highlights
       setToastMessage("Đã tạo phiên làm việc mới.");
   }
 
@@ -309,6 +313,7 @@ export default function App() {
             setOutline([]); 
             setStoryMetadata(undefined); // Reset metadata on upload
             setScriptBlocks([]); 
+            setRewrittenIndices(new Set()); // Clear highlights
             setIsStoryUploaded(true);
             setToastMessage(`Đã upload truyện "${fileName}" thành công. Dữ liệu đã được lưu vào thư viện.`);
             e.target.value = ''; 
@@ -349,6 +354,7 @@ export default function App() {
     setStoryMetadata(result.metadata); // Store the generated characters
     setStoryBlocks([]);
     setScriptBlocks([]);
+    setRewrittenIndices(new Set());
     setIsStoryUploaded(false);
   }, 'outline');
 
@@ -364,6 +370,7 @@ export default function App() {
     const safeMetadata = storyMetadata || { femaleLead: "Nữ chính", maleLead: "Nam chính", villain: "Phản diện" };
 
     setStoryBlocks([]);
+    setRewrittenIndices(new Set()); // Reset highlights
     for (const item of outline) {
         const content = await geminiService.generateStoryBlock(item, safeMetadata, bookTitle, bookIdea, language, selectedModel, apiKeyGemini);
         setStoryBlocks(prev => [...prev, {
@@ -446,9 +453,12 @@ export default function App() {
                 updated[editingBlockIndex] = { ...updated[editingBlockIndex], content: newContent };
                 return updated;
             });
+            // Mark as rewritten
+            setRewrittenIndices(prev => new Set(prev).add(editingBlockIndex));
             setToastMessage("Đã viết lại đoạn truyện thành công!");
         } else if (rewriteScope === 'all') {
              setRewriteProgress({ current: 0, total: storyBlocks.length });
+             setRewrittenIndices(new Set()); // Clear old highlights when starting new batch
              
              // Process sequentially to ensure stability
              for (let i = 0; i < storyBlocks.length; i++) {
@@ -468,6 +478,9 @@ export default function App() {
                         updated[i] = { ...updated[i], content: newContent };
                         return updated;
                     });
+
+                    // Update indices set to highlight UI immediately
+                    setRewrittenIndices(prev => new Set(prev).add(i));
                     
                     setRewriteProgress({ current: i + 1, total: storyBlocks.length });
                  } catch (e) {
@@ -735,10 +748,19 @@ export default function App() {
                 {loading.story && <LoadingOverlay />}
                 {storyBlocks.length === 0 ? <Empty text="Chưa có nội dung truyện. Nhấn 'Viết Truyện' hoặc Upload file." /> : (
                   <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
-                    {storyBlocks.map((b, index) => (
-                      <div key={b.index} className={`p-3 rounded-xl ${theme.bgCard}/50 border ${theme.border}`}>
+                    {storyBlocks.map((b, index) => {
+                      const isRewritten = rewrittenIndices.has(index);
+                      const cardStyle = isRewritten 
+                          ? "bg-emerald-900/30 border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.1)]" 
+                          : `${theme.bgCard}/50 border ${theme.border}`;
+                      
+                      return (
+                      <div key={b.index} className={`p-3 rounded-xl border transition-all duration-500 ${cardStyle}`}>
                          <div className="flex justify-between items-start mb-2">
-                             <div className={`font-semibold ${theme.textHighlight}`}>{b.title}</div>
+                             <div className="flex items-center gap-2">
+                                <div className={`font-semibold ${theme.textHighlight}`}>{b.title}</div>
+                                {isRewritten && <span className="text-[10px] bg-emerald-600 text-white px-1.5 py-0.5 rounded font-bold animate-pulse">NEW</span>}
+                             </div>
                              <button 
                                 onClick={() => openRewriteModal(index)}
                                 disabled={isGlobalLoading}
@@ -751,7 +773,7 @@ export default function App() {
                          </div>
                          <p className="whitespace-pre-wrap leading-relaxed opacity-90 text-sm">{b.content}</p>
                       </div>
-                    ))}
+                    )})}
                   </div>
                 )}
             </div>

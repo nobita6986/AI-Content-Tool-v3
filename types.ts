@@ -61,4 +61,5 @@ export interface SavedSession {
   seo: SEOResult | null;
   videoPrompts: string[];
   thumbTextIdeas: string[];
+  evaluationResult?: string | null; // Store evaluation result
 }

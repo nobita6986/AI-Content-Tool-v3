@@ -179,6 +179,8 @@ export default function App() {
   const [thumbTextIdeas, setThumbTextIdeas] = useState<string[]>([]);
 
   const [loading, setLoading] = useState<LoadingStates>(INITIAL_LOADING_STATES);
+  // New State for progress text
+  const [progressText, setProgressText] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   
   const [isStoryUploaded, setIsStoryUploaded] = useState(false);
@@ -309,7 +311,8 @@ export default function App() {
             scriptBlocks,
             seo,
             videoPrompts,
-            thumbTextIdeas
+            thumbTextIdeas,
+            evaluationResult, // Save evaluation result
         };
 
         setSessions(prev => {
@@ -323,7 +326,7 @@ export default function App() {
     return () => {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [bookTitle, bookIdea, bookImage, durationMin, isAutoDuration, calculatedChapters, frameRatio, outline, storyMetadata, storyBlocks, scriptBlocks, seo, videoPrompts, thumbTextIdeas, language, sessionId]);
+  }, [bookTitle, bookIdea, bookImage, durationMin, isAutoDuration, calculatedChapters, frameRatio, outline, storyMetadata, storyBlocks, scriptBlocks, seo, videoPrompts, thumbTextIdeas, language, sessionId, evaluationResult]);
 
   // HELPER: Force update session immediately (skip debounce)
   // Useful for real-time saving during batch processes like Rewrite
@@ -348,7 +351,8 @@ export default function App() {
           scriptBlocks,
           seo,
           videoPrompts,
-          thumbTextIdeas
+          thumbTextIdeas,
+          evaluationResult,
       };
 
       setSessions(prev => {
@@ -376,6 +380,7 @@ export default function App() {
       setVideoPrompts(s.videoPrompts || []);
       setThumbTextIdeas(s.thumbTextIdeas || []);
       setRewrittenIndices(new Set()); // Clear highlights on load
+      setEvaluationResult(s.evaluationResult || null); // Load evaluation result
       
       setIsLibraryModalOpen(false);
       setToastMessage(`Đã tải lại phiên làm việc: "${s.bookTitle}"`);
@@ -406,6 +411,7 @@ export default function App() {
       setThumbTextIdeas([]);
       setIsAutoDuration(false);
       setRewrittenIndices(new Set()); // Clear highlights
+      setEvaluationResult(null); // Clear evaluation result
       setToastMessage("Đã tạo phiên làm việc mới.");
   }
 
@@ -463,6 +469,7 @@ export default function App() {
       
       setError(null);
       setLoading(prev => ({ ...prev, [key]: true }));
+      setProgressText(""); // Reset progress text on new start
       try {
         return await fn(...args);
       } catch (err) {
@@ -470,6 +477,7 @@ export default function App() {
         setError(`Lỗi khi tạo ${key}: ${err instanceof Error ? err.message : String(err)}`);
       } finally {
         setLoading(prev => ({ ...prev, [key]: false }));
+        setProgressText("");
       }
     };
   };
@@ -499,14 +507,27 @@ export default function App() {
 
     setStoryBlocks([]);
     setRewrittenIndices(new Set()); // Reset highlights
-    for (const item of outline) {
+    
+    // Running buffer for updates
+    const runningBlocks: StoryBlock[] = [];
+
+    for (let i = 0; i < outline.length; i++) {
+        const item = outline[i];
+        setProgressText(`Đang viết chương ${i + 1}/${outline.length}...`);
+        
         const content = await geminiService.generateStoryBlock(item, safeMetadata, bookTitle, bookIdea, language, selectedModel, apiKeyGemini);
-        setStoryBlocks(prev => [...prev, {
+        
+        const newBlock = {
             index: item.index,
             title: item.title,
             content: content
-        }]);
+        };
+        runningBlocks.push(newBlock);
+        
+        // Update state progressively to show results as they come in
+        setStoryBlocks([...runningBlocks]);
     }
+    // Final session update happens via useEffect
   }, 'story');
 
   const handleGenerateReviewScript = withErrorHandling(async () => {
@@ -517,7 +538,12 @@ export default function App() {
     }
 
     setScriptBlocks([]);
-    for (const block of storyBlocks) {
+    const runningScripts: ScriptBlock[] = [];
+
+    for (let i = 0; i < storyBlocks.length; i++) {
+      const block = storyBlocks[i];
+      setProgressText(`Đang tạo kịch bản review ${i + 1}/${storyBlocks.length}...`);
+
       const text = await geminiService.generateReviewBlock(block.content, block.title, bookTitle, currentChannelName, currentMcName, language, selectedModel, apiKeyGemini);
       const newBlock: ScriptBlock = {
         index: block.index,
@@ -525,7 +551,8 @@ export default function App() {
         text: text,
         chars: text.length,
       };
-      setScriptBlocks(prev => [...prev, newBlock]);
+      runningScripts.push(newBlock);
+      setScriptBlocks([...runningScripts]);
     }
   }, 'script');
 
@@ -570,7 +597,7 @@ export default function App() {
   };
 
   const openEvaluationModal = () => {
-      setEvaluationResult(null); // Reset previous result
+      // Don't clear evaluationResult here, so user can see previous results
       setIsEvaluationModalOpen(true);
   }
 
@@ -615,6 +642,8 @@ export default function App() {
              for (let i = 0; i < storyBlocks.length; i++) {
                  try {
                     const block = storyBlocks[i];
+                    setProgressText(`Đang sửa chương ${i + 1}/${storyBlocks.length}...`);
+                    
                     const newContent = await geminiService.rewriteStoryBlock(
                         block.content,
                         rewriteFeedback,
@@ -649,6 +678,7 @@ export default function App() {
         setError(`Lỗi khi viết lại: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
         setIsRewriting(false);
+        setProgressText("");
     }
   };
 
@@ -721,7 +751,7 @@ export default function App() {
     <div className={`min-h-screen w-full font-sans transition-colors duration-500 ${theme.bg} ${theme.textMain}`}>
       <header className={`px-6 py-8 border-b ${theme.border} sticky top-0 backdrop-blur bg-black/30 z-20`}>
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          <a href="/" className="group transition-transform hover:scale-105" onClick={(e) => { e.preventDefault(); createNewSession(); }}>
+          <a href="/" className="group transition-transform hover:scale-105 ml-4" onClick={(e) => { e.preventDefault(); createNewSession(); }}>
             <h1 className={`text-3xl md:text-5xl font-extrabold tracking-tighter text-transparent bg-clip-text bg-gradient-to-r ${theme.gradientTitle}`}>
               AI Content Tool
             </h1>
@@ -839,7 +869,7 @@ export default function App() {
                     </label>
                     <span className="text-[10px] opacity-70 italic">.txt</span>
                 </div>
-                <input type="file" accept=".txt" onChange={handleStoryUpload} className={`w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold ${theme.bgButton} ${theme.textHighlight} hover:file:${theme.bgCard} cursor-pointer`} />
+                <input type="file" accept=".txt" onChange={handleStoryUpload} className={`w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border file:border-${themeColor}-800 file:text-sm file:font-semibold file:${theme.bgButton} file:${theme.textHighlight} hover:file:border-${themeColor}-400 file:transition-colors cursor-pointer`} />
               </div>
 
               <div className="pt-1">
@@ -918,7 +948,7 @@ export default function App() {
               <ThemedButton onClick={handleGenerateOutline} disabled={isGlobalLoading || isStoryUploaded} className="text-xs px-2 py-1 h-8">Tạo Kịch bản khung</ThemedButton>
           }>
             <div className="relative">
-             {loading.outline && <LoadingOverlay />}
+             {loading.outline && <LoadingOverlay message="Đang tạo Kịch bản khung..." />}
              {outline.length === 0 ? <Empty text="Chưa có Kịch bản khung. Nhấn ‘Phân tích & Tạo Kịch bản khung’." /> : (
               <div>
                 {/* Character Metadata Display */}
@@ -967,11 +997,16 @@ export default function App() {
                
                <ThemedButton 
                   onClick={openEvaluationModal} 
-                  disabled={isGlobalLoading || storyBlocks.length === 0}
+                  disabled={(isGlobalLoading && !loading.evaluation) || storyBlocks.length === 0}
                   className="text-xs px-2 py-1 h-8 bg-purple-700/40 border-purple-600/50 hover:bg-purple-600/60"
                   title="Chấm điểm và nhận xét truyện"
                >
-                  Đánh giá
+                  {loading.evaluation ? (
+                      <span className="flex items-center gap-1.5">
+                         <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                         Đang chấm...
+                      </span>
+                  ) : "Đánh giá"}
                </ThemedButton>
 
                <ThemedButton onClick={exportStoryCSV} disabled={storyBlocks.length === 0} className="text-xs px-2 py-1 h-8">Tải CSV</ThemedButton>
@@ -979,7 +1014,7 @@ export default function App() {
             </div>
           }>
              <div className="relative">
-                {loading.story && <LoadingOverlay />}
+                {loading.story && <LoadingOverlay message={progressText || "Đang viết truyện..."} />}
                 {storyBlocks.length === 0 ? <Empty text="Chưa có nội dung truyện. Nhấn 'Viết Truyện' hoặc Upload file." /> : (
                   <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
                     {storyBlocks.map((b, index) => {
@@ -1020,7 +1055,7 @@ export default function App() {
              </div>
           }>
             <div className="relative">
-                {loading.script && <LoadingOverlay />}
+                {loading.script && <LoadingOverlay message={progressText || "Đang tạo kịch bản..."} />}
                 {scriptBlocks.length === 0 ? <Empty text="Chưa có kịch bản review." /> : (
                    <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
                      {scriptBlocks.map((b) => (
@@ -1036,7 +1071,7 @@ export default function App() {
 
           <Card title="6) SEO Metadata">
             <div className="relative">
-              {loading.seo && <LoadingOverlay />}
+              {loading.seo && <LoadingOverlay message="Đang tối ưu SEO..." />}
               {!seo ? <Empty text="Chưa có thông tin SEO." /> : (
                 <div className="space-y-4 text-sm">
                   <div>
@@ -1066,7 +1101,7 @@ export default function App() {
               <ThemedButton onClick={exportPromptCSV} disabled={videoPrompts.length === 0} className="text-xs px-2 py-1 h-8">Tải CSV</ThemedButton>
           }>
              <div className="relative">
-                 {loading.prompts && <LoadingOverlay />}
+                 {loading.prompts && <LoadingOverlay message="Đang tạo ý tưởng hình ảnh..." />}
                  {videoPrompts.length === 0 ? <Empty text="Chưa có prompt video/thumbnail." /> : (
                    <div className="space-y-4 text-sm max-h-[400px] overflow-y-auto pr-2">
                      <div>

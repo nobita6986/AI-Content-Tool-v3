@@ -1,6 +1,6 @@
 
 import React, { useEffect, useMemo, useState, useRef } from "react";
-import { OutlineItem, ScriptBlock, StoryBlock, SEOResult, LoadingStates, Language, SavedSession } from './types';
+import { OutlineItem, ScriptBlock, StoryBlock, SEOResult, LoadingStates, Language, SavedSession, StoryMetadata } from './types';
 import * as geminiService from './services/geminiService';
 import { Card, Empty, LoadingOverlay, Modal, Toast, Tooltip } from './components/ui';
 
@@ -74,7 +74,6 @@ export default function App() {
   
   // -- Config State Calculation --
   // Auto-calculate chapters: 1 chapter per ~2.5-3 mins to ensure depth (40-60k chars)
-  // If Auto Mode, we display a placeholder, but logic handles it.
   const calculatedChapters = useMemo(() => {
      if (isAutoDuration) return 18; // Placeholder avg for 50 mins
      return Math.max(3, Math.ceil(durationMin / 2.5));
@@ -95,6 +94,9 @@ export default function App() {
 
   // -- Output Data --
   const [outline, setOutline] = useState<OutlineItem[]>([]);
+  // Store generated character names here to ensure consistency
+  const [storyMetadata, setStoryMetadata] = useState<StoryMetadata | undefined>(undefined);
+  
   const [storyBlocks, setStoryBlocks] = useState<StoryBlock[]>([]);
   const [seo, setSeo] = useState<SEOResult | null>(null);
   const [scriptBlocks, setScriptBlocks] = useState<ScriptBlock[]>([]);
@@ -193,6 +195,7 @@ export default function App() {
             isAutoDuration,
             chaptersCount: calculatedChapters,
             frameRatio,
+            storyMetadata, // Save metadata
             outline,
             storyBlocks,
             scriptBlocks,
@@ -212,7 +215,7 @@ export default function App() {
     return () => {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [bookTitle, bookIdea, bookImage, durationMin, isAutoDuration, calculatedChapters, frameRatio, outline, storyBlocks, scriptBlocks, seo, videoPrompts, thumbTextIdeas, language, sessionId]);
+  }, [bookTitle, bookIdea, bookImage, durationMin, isAutoDuration, calculatedChapters, frameRatio, outline, storyMetadata, storyBlocks, scriptBlocks, seo, videoPrompts, thumbTextIdeas, language, sessionId]);
 
   const handleLoadSession = (s: SavedSession) => {
       setSessionId(s.id);
@@ -223,6 +226,7 @@ export default function App() {
       setDurationMin(s.durationMin);
       setIsAutoDuration(!!s.isAutoDuration);
       setFrameRatio(s.frameRatio || "16:9");
+      setStoryMetadata(s.storyMetadata); // Load metadata
       setOutline(s.outline || []);
       setStoryBlocks(s.storyBlocks || []);
       setScriptBlocks(s.scriptBlocks || []);
@@ -251,6 +255,7 @@ export default function App() {
       setBookTitle("");
       setBookIdea("");
       setOutline([]);
+      setStoryMetadata(undefined);
       setStoryBlocks([]);
       setScriptBlocks([]);
       setSeo(null);
@@ -290,6 +295,7 @@ export default function App() {
             }));
             setStoryBlocks(newBlocks);
             setOutline([]); 
+            setStoryMetadata(undefined); // Reset metadata on upload
             setScriptBlocks([]); 
             setIsStoryUploaded(true);
             setToastMessage(`Đã upload truyện "${fileName}" thành công. Dữ liệu đã được lưu vào thư viện.`);
@@ -325,8 +331,10 @@ export default function App() {
 
   const handleGenerateOutline = withErrorHandling(async () => {
     const result = await geminiService.generateOutline(bookTitle, bookIdea, currentChannelName, currentMcName, calculatedChapters, durationMin, language, isAutoDuration, selectedModel, apiKeyGemini);
-    const indexedResult = result.map((item, index) => ({ ...item, index }));
-    setOutline(indexedResult);
+    // Result now returns { chapters: ..., metadata: ... }
+    const indexedChapters = result.chapters.map((item, index) => ({ ...item, index }));
+    setOutline(indexedChapters);
+    setStoryMetadata(result.metadata); // Store the generated characters
     setStoryBlocks([]);
     setScriptBlocks([]);
     setIsStoryUploaded(false);
@@ -339,9 +347,13 @@ export default function App() {
         return;
     }
     
+    // Check if we have metadata. If we uploaded a story or have an old session without metadata, we might need a fallback.
+    // However, if outline exists from AI, metadata should exist.
+    const safeMetadata = storyMetadata || { femaleLead: "Nữ chính", maleLead: "Nam chính", villain: "Phản diện" };
+
     setStoryBlocks([]);
     for (const item of outline) {
-        const content = await geminiService.generateStoryBlock(item, bookTitle, bookIdea, language, selectedModel, apiKeyGemini);
+        const content = await geminiService.generateStoryBlock(item, safeMetadata, bookTitle, bookIdea, language, selectedModel, apiKeyGemini);
         setStoryBlocks(prev => [...prev, {
             index: item.index,
             title: item.title,
@@ -597,17 +609,27 @@ export default function App() {
             <div className="relative">
              {loading.outline && <LoadingOverlay />}
              {outline.length === 0 ? <Empty text="Chưa có sườn. Nhấn ‘Phân tích & Tạo sườn’." /> : (
-              <ol className="space-y-3 list-decimal ml-5">
-                {outline.map((o) => (
-                  <li key={o.index} className={`p-3 rounded-xl ${theme.bgCard}/50 border ${theme.border}`}>
-                    <div className={`font-semibold ${theme.textHighlight}`}>{o.title}</div>
-                    <div className={`${theme.textAccent} text-sm mt-1`}>{o.focus}</div>
-                    <ul className="mt-2 text-sm grid md:grid-cols-2 gap-2">
-                      {o.actions.map((a,idx)=>(<li key={idx} className={`px-2 py-1 rounded ${theme.bgCard} border ${theme.border} opacity-80`}>• {a}</li>))}
-                    </ul>
-                  </li>
-                ))}
-              </ol>
+              <div>
+                {/* Character Metadata Display */}
+                {storyMetadata && (
+                   <div className={`mb-4 p-3 rounded-lg ${theme.subtleBg} border border-dashed ${theme.border} text-sm grid grid-cols-1 md:grid-cols-3 gap-2`}>
+                      <div><span className="opacity-60 text-xs uppercase block">Nữ Chính</span><span className="font-semibold text-sky-200">{storyMetadata.femaleLead}</span></div>
+                      <div><span className="opacity-60 text-xs uppercase block">Nam Chính</span><span className="font-semibold text-emerald-200">{storyMetadata.maleLead}</span></div>
+                      <div><span className="opacity-60 text-xs uppercase block">Phản Diện</span><span className="font-semibold text-red-300">{storyMetadata.villain}</span></div>
+                   </div>
+                )}
+                <ol className="space-y-3 list-decimal ml-5">
+                  {outline.map((o) => (
+                    <li key={o.index} className={`p-3 rounded-xl ${theme.bgCard}/50 border ${theme.border}`}>
+                      <div className={`font-semibold ${theme.textHighlight}`}>{o.title}</div>
+                      <div className={`${theme.textAccent} text-sm mt-1`}>{o.focus}</div>
+                      <ul className="mt-2 text-sm grid md:grid-cols-2 gap-2">
+                        {o.actions.map((a,idx)=>(<li key={idx} className={`px-2 py-1 rounded ${theme.bgCard} border ${theme.border} opacity-80`}>• {a}</li>))}
+                      </ul>
+                    </li>
+                  ))}
+                </ol>
+              </div>
             )}
             </div>
           </Card>

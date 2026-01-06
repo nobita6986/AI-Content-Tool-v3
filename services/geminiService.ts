@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { OutlineItem, SEOResult, Language } from '../types';
+import { OutlineItem, SEOResult, Language, StoryMetadata } from '../types';
 
 /**
  * Execute a Google GenAI operation using provided apiKey or process.env.API_KEY.
@@ -22,16 +22,10 @@ const executeGenAIRequest = async <T>(
     }
     rawKey = rawKey || "";
 
-    // Strategy 1: Regex match for standard Google API Key (AIza...)
-    // This is the most robust way: it ignores surrounding newlines, spaces, quotes, or accidental text.
-    // Google Keys are 39 chars: 'AIza' (4) + 35 chars of base64url.
     const googleKeyMatch = rawKey.match(/AIza[0-9A-Za-z\-_]{35}/);
     let key = googleKeyMatch ? googleKeyMatch[0] : "";
 
-    // Strategy 2: If regex fails (unlikely for valid keys, but failsafe for potential format changes), 
-    // fall back to aggressive cleanup of the entire string.
     if (!key) {
-        // Remove: whitespace (\s), quotes ("'), newlines (\r\n), and non-printable chars
         const cleaned = rawKey.replace(/[\s"'\r\n]/g, '').replace(/[^\x21-\x7E]/g, '');
         if (cleaned.length > 0) key = cleaned;
     }
@@ -57,34 +51,50 @@ export const fileToBase64 = (file: File): Promise<string> => {
     });
 };
 
-export const generateOutline = async (bookTitle: string, idea: string, channelName: string, mcName: string, chaptersCount: number, durationMin: number, language: Language, isAutoDuration: boolean = false, model: string = 'gemini-3-pro-preview', apiKey?: string): Promise<Omit<OutlineItem, 'index'>[]> => {
+// Updated return type to include metadata
+export const generateOutline = async (bookTitle: string, idea: string, channelName: string, mcName: string, chaptersCount: number, durationMin: number, language: Language, isAutoDuration: boolean = false, model: string = 'gemini-3-pro-preview', apiKey?: string): Promise<{ chapters: Omit<OutlineItem, 'index'>[], metadata: StoryMetadata }> => {
     const isVi = language === 'vi';
     const langContext = isVi 
         ? "Ngôn ngữ đầu ra: Tiếng Việt." 
         : "Output Language: English (US). Tone: Professional, Engaging.";
     
-    const identityContext = `Context info - Channel Name: "${channelName || 'N/A'}", Host/MC Name: "${mcName || 'N/A'}".`;
-    const ideaContext = idea ? (isVi ? `Kết hợp với ý tưởng/bối cảnh: "${idea}".` : `Incorporate this idea/context: "${idea}".`) : "";
-    
     // Logic cho Prompt dựa trên chế độ Auto hoặc Manual
     let structurePrompt = "";
     if (isAutoDuration) {
         structurePrompt = isVi
-            ? `Mục tiêu: Tạo ra một video dài khoảng 40-60 phút (tương đương 40.000 - 60.000 ký tự kịch bản). Hãy tự quyết định số lượng chương phù hợp (thường từ 15 đến 25 chương) để đảm bảo độ sâu và chi tiết cho thời lượng này.`
-            : `Goal: Create a video approximately 40-60 minutes long (equivalent to 40,000 - 60,000 script characters). You decide the appropriate number of chapters (usually 15-25) to ensure depth and detail for this duration.`;
+            ? `Mục tiêu: Tạo ra một tiểu thuyết dài khoảng 40-60 phút đọc. Hãy tự quyết định số lượng chương phù hợp (thường từ 15 đến 20 chương) để đảm bảo chiều sâu cốt truyện.`
+            : `Goal: Create a novel script for 40-60 mins reading time. Decide appropriate chapter count (15-20) for plot depth.`;
     } else {
         structurePrompt = isVi
-            ? `Mục tiêu: Video dài chính xác ${durationMin} phút. Hãy chia nội dung thành ${chaptersCount} chương chính.`
-            : `Goal: Video strictly ${durationMin} minutes long. Structure the content into ${chaptersCount} main chapters.`;
+            ? `Mục tiêu: Video dài ${durationMin} phút. Chia nội dung thành ${chaptersCount} chương chính.`
+            : `Goal: Video strictly ${durationMin} minutes long. Structure into ${chaptersCount} main chapters.`;
     }
 
     const prompt = isVi 
-        ? `Dựa trên tên sách/chủ đề "${bookTitle}". ${ideaContext} ${identityContext} Hãy tạo dàn ý kịch bản cho một video YouTube theo phong cách kể chuyện/audiobook.
-           ${structurePrompt}
-           Cấu trúc bắt buộc: 1. Hook (Móc nối - Nhắc tên kênh ${channelName} nếu phù hợp), 2. Intro (Giới thiệu MC ${mcName}), 3. Các chương chính của câu chuyện (đủ số lượng để đạt thời lượng mục tiêu), 4. Bài học rút ra, và 5. Kết thúc. ${langContext}`
-        : `Based on the book/topic "${bookTitle}". ${ideaContext} ${identityContext} Create a script outline for a YouTube video in storytelling/audiobook style.
-           ${structurePrompt}
-           Required Structure: 1. Hook (Mention channel ${channelName} if fitting), 2. Intro (Introduce Host ${mcName}), 3. Main Story Chapters (enough to meet target duration), 4. Key Takeaways, 5. Conclusion. ${langContext}`;
+        ? `Bạn là một biên kịch tiểu thuyết chuyên nghiệp. Nhiệm vụ: Xây dựng hệ thống nhân vật và Dàn ý chi tiết cho tác phẩm "${bookTitle}".
+           Bối cảnh/Ý tưởng bổ sung: "${idea || 'Tự sáng tạo theo motif Trọng sinh/Trả thù/Ngôn tình kịch tính'}".
+           
+           YÊU CẦU QUAN TRỌNG:
+           1. Thiết lập 3 nhân vật cốt lõi với TÊN CỐ ĐỊNH (Không thay đổi tên trong suốt tác phẩm):
+              - Nữ chính: Tên hay, tính cách kiên cường, thông minh sau khi trọng sinh.
+              - Nam chính (Chân ái): Tên hay, thâm tình, bảo vệ thầm lặng, quyền lực.
+              - Phản diện (Tra nam/Tiểu tam): Tên hay, ích kỷ, đạo đức giả nhưng có chiều sâu tâm lý (không chỉ xấu một màu).
+           2. Cốt truyện phải có một trục xung đột chính xuyên suốt (ví dụ: Dự án tranh đấu, Bí mật tai nạn kiếp trước, v.v) chứ không chỉ là các cảnh vả mặt rời rạc.
+           3. ${structurePrompt}
+           4. Cấu trúc JSON trả về phải bao gồm thông tin nhân vật và danh sách các chương.
+           ${langContext}`
+        : `You are a professional novel screenwriter. Task: Establish characters and detailed Outline for "${bookTitle}".
+           Context/Idea: "${idea || 'Creative Rewrite/Revenge/Romance'}".
+           
+           CRITICAL REQUIREMENTS:
+           1. Define 3 core characters with FIXED NAMES:
+              - Female Lead: Strong, smart after rebirth.
+              - Male Lead: Deeply in love, silent protector, powerful.
+              - Villain: Selfish, hypocritical but psychologically complex.
+           2. Plot must have a central conflict arc, not just disjointed scenes.
+           3. ${structurePrompt}
+           4. JSON output must include character metadata and chapter list.
+           ${langContext}`;
 
     return executeGenAIRequest(async (ai) => {
         const response = await ai.models.generateContent({
@@ -93,19 +103,34 @@ export const generateOutline = async (bookTitle: string, idea: string, channelNa
             config: {
                 responseMimeType: "application/json",
                 responseSchema: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            title: { type: Type.STRING },
-                            focus: { type: Type.STRING },
-                            actions: {
-                                type: Type.ARRAY,
-                                items: { type: Type.STRING }
-                            }
+                    type: Type.OBJECT,
+                    properties: {
+                        metadata: {
+                            type: Type.OBJECT,
+                            properties: {
+                                femaleLead: { type: Type.STRING, description: "Name of Female Lead" },
+                                maleLead: { type: Type.STRING, description: "Name of Male Lead" },
+                                villain: { type: Type.STRING, description: "Name of Villain" }
+                            },
+                            required: ["femaleLead", "maleLead", "villain"]
                         },
-                        required: ["title", "focus", "actions"]
-                    }
+                        chapters: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    title: { type: Type.STRING },
+                                    focus: { type: Type.STRING },
+                                    actions: {
+                                        type: Type.ARRAY,
+                                        items: { type: Type.STRING }
+                                    }
+                                },
+                                required: ["title", "focus", "actions"]
+                            }
+                        }
+                    },
+                    required: ["metadata", "chapters"]
                 }
             }
         });
@@ -114,17 +139,44 @@ export const generateOutline = async (bookTitle: string, idea: string, channelNa
     }, apiKey);
 };
 
-export const generateStoryBlock = async (item: OutlineItem, bookTitle: string, idea: string, language: Language, model: string = 'gemini-3-flash-preview', apiKey?: string): Promise<string> => {
+export const generateStoryBlock = async (item: OutlineItem, metadata: StoryMetadata, bookTitle: string, idea: string, language: Language, model: string = 'gemini-3-flash-preview', apiKey?: string): Promise<string> => {
     const isVi = language === 'vi';
     const ideaContext = idea ? (isVi ? `Lưu ý ý tưởng chủ đạo: "${idea}".` : `Note the core idea: "${idea}".`) : "";
     
+    // Enforce consistency using metadata
+    const characterContext = isVi
+        ? `HỆ THỐNG NHÂN VẬT (BẮT BUỘC DÙNG ĐÚNG TÊN):
+           - Nữ chính: ${metadata.femaleLead}
+           - Nam chính: ${metadata.maleLead}
+           - Phản diện: ${metadata.villain}
+           TUYỆT ĐỐI KHÔNG ĐỔI TÊN NHÂN VẬT.`
+        : `CHARACTER SYSTEM (MUST USE EXACT NAMES):
+           - Female Lead: ${metadata.femaleLead}
+           - Male Lead: ${metadata.maleLead}
+           - Villain: ${metadata.villain}
+           DO NOT CHANGE NAMES.`;
+
     const prompt = isVi
-        ? `Bạn là một tiểu thuyết gia tài ba. Hãy viết nội dung chi tiết cho chương "${item.title}" của tác phẩm "${bookTitle}". ${ideaContext}
-           Mục tiêu: "${item.focus}". Tình tiết: ${item.actions.join(', ')}.
-           Viết dạng văn xuôi, kể chuyện, văn phong lôi cuốn, giàu cảm xúc. 400-600 từ. Chỉ trả về nội dung truyện tiếng Việt.`
-        : `You are a best-selling novelist. Write detailed content for the chapter "${item.title}" of the book/story "${bookTitle}". ${ideaContext}
+        ? `Bạn là một tiểu thuyết gia tài ba. Hãy viết nội dung chi tiết cho chương "${item.title}" của tác phẩm "${bookTitle}".
+           ${characterContext}
+           ${ideaContext}
+           Mục tiêu chương: "${item.focus}". Tình tiết chính: ${item.actions.join(', ')}.
+           
+           YÊU CẦU KỸ THUẬT VIẾT:
+           1. Show, don't tell (Tả cảnh ngụ tình, dùng hành động, ánh mắt, chi tiết nhỏ để bộc lộ cảm xúc thay vì kể lể).
+           2. Chỉ viết nội dung truyện thuần túy (văn xuôi). TUYỆT ĐỐI KHÔNG chèn lời dẫn MC, không chèn "Xin chào khán giả", không kêu gọi Subscribe.
+           3. Tâm lý nhân vật phải sâu sắc. Phản diện không chỉ xấu xa mà phải có lý do/tham vọng riêng.
+           4. Độ dài: 500-700 từ. Ngôn ngữ: Tiếng Việt giàu cảm xúc.`
+        : `You are a best-selling novelist. Write detailed content for chapter "${item.title}" of "${bookTitle}".
+           ${characterContext}
+           ${ideaContext}
            Goal: "${item.focus}". Plot points: ${item.actions.join(', ')}.
-           Write in prose, storytelling style, engaging and emotional. 400-600 words. Output strictly in English.`;
+           
+           WRITING RULES:
+           1. Show, don't tell. Use evocative details.
+           2. PURE STORY CONTENT ONLY. NO Radio Host/MC intro/outro inside the story text.
+           3. Deep psychology. Villains should be complex.
+           4. Length: 500-700 words. English.`;
     
     return executeGenAIRequest(async (ai) => {
         const response = await ai.models.generateContent({
@@ -143,17 +195,24 @@ export const generateReviewBlock = async (storyContent: string, chapterTitle: st
 
     const prompt = isVi
         ? `Bạn là một Reviewer/MC kênh AudioBook nổi tiếng (giọng đọc trầm ấm, sâu sắc).
-           Thông tin định danh: ${identityInfo}. Hãy sử dụng tên Kênh và tên MC này thay cho các từ chung chung khi chào hỏi hoặc giới thiệu.
-           Nhiệm vụ: Viết lời dẫn/kịch bản Review cho phần nội dung sau của cuốn sách "${bookTitle}".
-           Chương: "${chapterTitle}"
-           Nội dung gốc: "${storyContent}"
-           Yêu cầu: Phân tích, bình luận, dẫn dắt. Đan xen tóm tắt và bài học. Giọng văn tự nhiên. Trả lời Tiếng Việt.`
-        : `You are a famous Audiobook Narrator/Reviewer (warm, insightful voice).
-           Identity Info: ${identityInfo}. Use this Channel Name and Host Name naturally in intros/outros instead of placeholders.
-           Task: Write a script/commentary review for the following content of the book "${bookTitle}".
-           Chapter: "${chapterTitle}"
-           Original Content: "${storyContent}"
-           Requirements: Analyze, commentate, and guide the listener. Interweave summary with deep insights. Natural, conversational tone. Output strictly in English.`;
+           Thông tin định danh: ${identityInfo}. 
+           Nhiệm vụ: Chuyển thể nội dung truyện sau thành kịch bản đọc (lời dẫn).
+           
+           Nội dung truyện gốc: "${storyContent}"
+           
+           YÊU CẦU:
+           - Đây là lúc MC xuất hiện. Hãy phân tích tâm lý nhân vật, bình luận về tình tiết, và dẫn dắt người nghe.
+           - Giọng văn tự nhiên, như đang kể chuyện cho bạn bè.
+           - Đan xen giữa kể chuyện và bình luận sâu sắc.`
+        : `You are a famous Audiobook Narrator/Reviewer.
+           Identity Info: ${identityInfo}.
+           Task: Adapt the following story content into a narration script.
+           
+           Original Story: "${storyContent}"
+           
+           REQUIREMENTS:
+           - Analyze psychology, comment on the plot, guide the listener.
+           - Natural, conversational tone.`;
     
     return executeGenAIRequest(async (ai) => {
         const response = await ai.models.generateContent({

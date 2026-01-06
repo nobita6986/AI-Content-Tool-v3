@@ -8,6 +8,12 @@ export interface OutlineItem {
   actions: string[];
 }
 
+export interface StoryMetadata {
+  femaleLead: string;
+  maleLead: string;
+  villain: string;
+}
+
 export interface StoryBlock {
   index: number;
   title: string;
@@ -44,9 +50,10 @@ export interface SavedSession {
   bookIdea: string;
   bookImage: string | null;
   durationMin: number;
-  isAutoDuration?: boolean; // New optional field
+  isAutoDuration?: boolean;
   chaptersCount: number;
   frameRatio: string;
+  storyMetadata?: StoryMetadata; // New field to store consistent names
   outline: OutlineItem[];
   storyBlocks: StoryBlock[];
   scriptBlocks: ScriptBlock[];

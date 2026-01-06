@@ -341,6 +341,122 @@ export const generateThumbIdeas = async (bookTitle: string, durationMin: number,
     }, apiKey);
 };
 
+export const evaluateStory = async (
+    fullStoryText: string,
+    mode: 'romance' | 'general',
+    bookTitle: string,
+    model: string = 'gemini-3-pro-preview',
+    apiKey?: string
+): Promise<string> => {
+    const ROMANCE_CRITERIA = `
+## ✅ HỆ TIÊU CHÍ CHẤM ĐIỂM NGÔN TÌNH (0–10 mỗi tiêu chí)
+
+### 🧩 1) Hook mở đầu & “lời hứa ngôn tình” (0–10)
+- 3 chương đầu có **móc câu** không? (tình huống gặp gỡ/định mệnh/đòn twist)
+- Có “đúng chất” sub-genre không (ví dụ tổng tài, cung đình, tu tiên, chữa lành…)?
+- Nút thắt mở đầu có đủ khiến người đọc **muốn cày tiếp**?
+*Trừ điểm khi:* Vào đề chậm, kể bối cảnh dài.
+
+### 💞 2) Xây dựng nhân vật chính & “chemistry CP” (0–10)
+- Nam/Nữ chính có **mục tiêu riêng**, điểm yếu riêng?
+- Chemistry đến từ **tương tác cụ thể**, không chỉ mô tả.
+- Sự hấp dẫn của CP: “đối trọng” hay “bù trừ” hợp lý?
+*Trừ điểm khi:* Mary Sue/Long Aotian quá đà. Tình cảm hình thành vô lý.
+
+### 🔥 3) Tiến trình tình cảm & xung đột (0–10)
+- Quan hệ có **tiến triển theo nấc**.
+- Xung đột có **cội rễ tính cách hoặc hoàn cảnh**.
+- Ngọt/ngược có nhịp.
+*Trừ điểm khi:* Hiểu lầm kéo dài vô lý. Drama lặp lại.
+
+### 🧠 4) Plot phụ, logic & độ chắc của bối cảnh (0–10)
+- Plot phụ có **đỡ** cho tuyến tình cảm hay làm loãng?
+- Logic sự kiện: động cơ – hệ quả rõ.
+*Trừ điểm khi:* Lỗ hổng timeline. Thông tin mơ hồ.
+
+### ⏱️ 5) Nhịp chương, cao trào & “điểm sảng” (0–10)
+- Nhịp chương có “kéo người đọc”.
+- Cao trào đặt đúng chỗ, đủ lực.
+*Trừ điểm khi:* Nhiều chương “đệm” kể lặp. Cao trào bị “kể bằng lời”.
+
+### ✍️ 6) Văn phong, thoại & khả năng gợi cảm xúc (0–10)
+- Văn phong nhất quán.
+- Thoại có cá tính.
+- Miêu tả cảm xúc/khung cảnh gợi hình.
+*Trừ điểm khi:* Sáo ngữ ngập. Câu dài lê thê.
+
+### 🪞 7) Chủ đề, dư âm & “đạo đức lãng mạn” (0–10)
+- Truyện có chủ đề ngầm không?
+- Dư âm sau khi kết thúc.
+*Trừ điểm mạnh khi:* Lãng mạn hóa bạo lực/ép buộc mà không phản tư.
+`;
+
+    const GENERAL_CRITERIA = `
+## 🧩 1. Kết cấu và mạch cảm xúc (0–10)
+- Kịch bản có **mở – thân – kết** rõ không?
+- Mạch cảm xúc có được **dẫn dắt hợp lý**?
+- Cao trào nằm ở đâu? Có đủ lực không?
+*Trừ điểm khi:* Vào đề chậm. Cao trào bị kể bằng lời. Kết thúc đột ngột.
+
+## 📚 2. Độ chính xác & nghiên cứu (0–10)
+- Thông tin có **đúng, nhất quán, hợp lý** không?
+- Có dấu hiệu nghiên cứu thật hay chỉ là kiến thức bề mặt?
+*Trừ điểm khi:* Dùng khái niệm lớn nhưng mơ hồ. Sai logic cơ bản.
+
+## ✍️ 3. Giọng văn & phong cách kể (0–10)
+- Giọng kể có **nhất quán** không?
+- Có dấu ấn riêng hay đại trà?
+- Ngôn ngữ có điện ảnh, gợi hình không?
+*Trừ điểm khi:* Lạm dụng sáo ngữ. Văn viết như bài nghị luận.
+
+## 💡 4. Ý tưởng và chiều sâu tư tưởng (0–10)
+- Kịch bản có **ý tưởng trung tâm rõ ràng** không?
+- Có góc nhìn riêng hay chỉ nhắc lại điều đã quá quen?
+*Trừ điểm khi:* Thông điệp quá an toàn. Chỉ truyền cảm xúc, không truyền suy nghĩ.
+
+## 🪶 5. Cấu trúc, nhịp đọc & sức nặng hình ảnh (0–10)
+- Nhịp đọc nhanh/chậm có hợp lý?
+- Hình ảnh được tạo ra bằng chữ có đủ sức nặng điện ảnh?
+*Trừ điểm khi:* Câu dài lê thê. Nói nhiều nhưng không có hình ảnh đọng lại.
+`;
+
+    const systemInstruction = mode === 'romance' 
+        ? "Bạn là một Biên tập viên/Giám định viên tiểu thuyết ngôn tình chuyên nghiệp, khắt khe nhưng công tâm."
+        : "Bạn là một Trợ lý chấm điểm kịch bản chuyên nghiệp với tư duy phê bình điện ảnh – văn chương.";
+
+    const criteria = mode === 'romance' ? ROMANCE_CRITERIA : GENERAL_CRITERIA;
+
+    const prompt = `
+    ${systemInstruction}
+    Hãy đọc và đánh giá nội dung của tác phẩm "${bookTitle}" dựa trên hệ tiêu chí dưới đây.
+
+    NỘI DUNG TÁC PHẨM CẦN ĐÁNH GIÁ:
+    """
+    ${fullStoryText}
+    """
+
+    HỆ TIÊU CHÍ ĐÁNH GIÁ:
+    ${criteria}
+
+    YÊU CẦU ĐẦU RA:
+    1. Trả về kết quả dưới dạng Markdown.
+    2. Chấm điểm cụ thể cho từng mục.
+    3. Tính TỔNG ĐIỂM (Trung bình cộng).
+    4. Phần "TỔNG KẾT CUỐI BÀI" và "GỢI Ý CẢI THIỆN" phải cực kỳ chi tiết, thẳng thắn, không tâng bốc.
+    5. Ngôn ngữ đánh giá: Tiếng Việt.
+    `;
+
+    // Note: Evaluate allows passing huge context, gemini-3-pro-preview is best for this.
+    return executeGenAIRequest(async (ai) => {
+        const response = await ai.models.generateContent({
+            model: model.includes('gpt') ? 'gemini-3-pro-preview' : model,
+            contents: [{ parts: [{ text: prompt }] }],
+        });
+        return response.text;
+    }, apiKey);
+};
+
+
 export const chunkText = (text: string, maxChars: number = 2000): string[] => {
     const chunks: string[] = [];
     let currentChunk = "";

@@ -40,6 +40,7 @@ export interface LoadingStates {
   seo: boolean;
   script: boolean;
   prompts: boolean;
+  evaluation: boolean;
 }
 
 export interface SavedSession {

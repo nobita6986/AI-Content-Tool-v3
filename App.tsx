@@ -105,6 +105,7 @@ const INITIAL_LOADING_STATES: LoadingStates = {
   seo: false,
   script: false,
   prompts: false,
+  evaluation: false,
 };
 
 export default function App() {
@@ -157,6 +158,10 @@ export default function App() {
   const [rewriteProgress, setRewriteProgress] = useState<{current: number, total: number} | null>(null);
   // Track indices of blocks that have been rewritten to highlight them
   const [rewrittenIndices, setRewrittenIndices] = useState<Set<number>>(new Set());
+
+  // -- Evaluation State --
+  const [isEvaluationModalOpen, setIsEvaluationModalOpen] = useState(false);
+  const [evaluationResult, setEvaluationResult] = useState<string | null>(null);
 
   // -- API Keys --
   const [apiKeyGemini, setApiKeyGemini] = useState("");
@@ -483,7 +488,7 @@ export default function App() {
 
   const handleGenerateStory = withErrorHandling(async () => {
     if (outline.length === 0) {
-        setError("Cần có sườn (outline) trước khi viết truyện.");
+        setError("Cần có Kịch bản khung (outline) trước khi viết truyện.");
         setLoading(prev => ({ ...prev, story: false }));
         return;
     }
@@ -538,6 +543,17 @@ export default function App() {
     setThumbTextIdeas(thumbs);
   }, 'prompts');
 
+  const handleEvaluateStory = withErrorHandling(async (mode: 'romance' | 'general') => {
+      // Collect full story text
+      if (storyBlocks.length === 0) {
+          throw new Error("Chưa có nội dung truyện để đánh giá.");
+      }
+      
+      const fullText = storyBlocks.map(b => `### ${b.title}\n${b.content}`).join("\n\n");
+      const result = await geminiService.evaluateStory(fullText, mode, bookTitle, selectedModel, apiKeyGemini);
+      setEvaluationResult(result);
+  }, 'evaluation');
+
   // --- REWRITE LOGIC ---
   const openRewriteModal = (index: number) => {
     setRewriteScope('single');
@@ -552,6 +568,11 @@ export default function App() {
     setRewriteFeedback("");
     setIsRewriteModalOpen(true);
   };
+
+  const openEvaluationModal = () => {
+      setEvaluationResult(null); // Reset previous result
+      setIsEvaluationModalOpen(true);
+  }
 
   const handleRewriteSubmit = async () => {
     if (!rewriteFeedback.trim()) return;
@@ -882,8 +903,8 @@ export default function App() {
           
           <Card title="2) Tạo Nội Dung">
             <div className="flex flex-col space-y-2">
-              <ThemedButton onClick={handleGenerateOutline} disabled={isGlobalLoading || isStoryUploaded}>Phân tích & Tạo sườn</ThemedButton>
-              <ThemedButton onClick={handleGenerateStory} disabled={isGlobalLoading || isStoryUploaded}>Viết Truyện (Theo sườn)</ThemedButton>
+              <ThemedButton onClick={handleGenerateOutline} disabled={isGlobalLoading || isStoryUploaded}>Phân tích & Tạo Kịch bản khung</ThemedButton>
+              <ThemedButton onClick={handleGenerateStory} disabled={isGlobalLoading || isStoryUploaded}>Viết Truyện (Theo Kịch bản khung)</ThemedButton>
               <ThemedButton onClick={handleGenerateReviewScript} disabled={isGlobalLoading}>Review Truyện (Kịch bản Audio)</ThemedButton>
               <ThemedButton onClick={handleGenerateSEO} disabled={isGlobalLoading}>Tạo Tiêu đề & Mô tả SEO</ThemedButton>
               <ThemedButton onClick={handleGeneratePrompts} disabled={isGlobalLoading}>Tạo Prompt Video & Thumbnail</ThemedButton>
@@ -893,12 +914,12 @@ export default function App() {
         </section>
 
         <section className="lg:col-span-2 space-y-6">
-          <Card title="3) Sườn kịch bản" actions={
-              <ThemedButton onClick={handleGenerateOutline} disabled={isGlobalLoading || isStoryUploaded} className="text-xs px-2 py-1 h-8">Tạo sườn</ThemedButton>
+          <Card title="3) Kịch bản khung" actions={
+              <ThemedButton onClick={handleGenerateOutline} disabled={isGlobalLoading || isStoryUploaded} className="text-xs px-2 py-1 h-8">Tạo Kịch bản khung</ThemedButton>
           }>
             <div className="relative">
              {loading.outline && <LoadingOverlay />}
-             {outline.length === 0 ? <Empty text="Chưa có sườn. Nhấn ‘Phân tích & Tạo sườn’." /> : (
+             {outline.length === 0 ? <Empty text="Chưa có Kịch bản khung. Nhấn ‘Phân tích & Tạo Kịch bản khung’." /> : (
               <div>
                 {/* Character Metadata Display */}
                 {storyMetadata && (
@@ -943,6 +964,16 @@ export default function App() {
                    </span>
                  ) : "Sửa / Viết lại"}
                </ThemedButton>
+               
+               <ThemedButton 
+                  onClick={openEvaluationModal} 
+                  disabled={isGlobalLoading || storyBlocks.length === 0}
+                  className="text-xs px-2 py-1 h-8 bg-purple-700/40 border-purple-600/50 hover:bg-purple-600/60"
+                  title="Chấm điểm và nhận xét truyện"
+               >
+                  Đánh giá
+               </ThemedButton>
+
                <ThemedButton onClick={exportStoryCSV} disabled={storyBlocks.length === 0} className="text-xs px-2 py-1 h-8">Tải CSV</ThemedButton>
                <ThemedButton onClick={exportStoryTXT} disabled={storyBlocks.length === 0} className="text-xs px-2 py-1 h-8">Tải TXT</ThemedButton>
             </div>
@@ -1106,8 +1137,8 @@ export default function App() {
              <div className="space-y-4 text-sm text-slate-300">
                 <ol className="list-decimal ml-5 space-y-3">
                    <li><b>Cài đặt:</b> Nhập API Key. Cấu hình Tên Kênh/MC để lời dẫn tự nhiên hơn.</li>
-                   <li><b>Lên ý tưởng:</b> Nhập tên sách/chủ đề. Nhấn "Tạo Sườn". AI sẽ đề xuất dàn ý + nhân vật.</li>
-                   <li><b>Viết truyện:</b> Nhấn "Viết Truyện". AI sẽ viết lần lượt từng chương dựa trên sườn đã duyệt.</li>
+                   <li><b>Lên ý tưởng:</b> Nhập tên sách/chủ đề. Nhấn "Tạo Kịch bản khung". AI sẽ đề xuất dàn ý + nhân vật.</li>
+                   <li><b>Viết truyện:</b> Nhấn "Viết Truyện". AI sẽ viết lần lượt từng chương dựa trên Kịch bản khung đã duyệt.</li>
                    <li><b>Kiểm tra & Sửa:</b> Đọc lướt nội dung. Nếu đoạn nào chưa hay, nhấn "Sửa" ngay tại block đó để AI viết lại.</li>
                    <li><b>Xuất bản:</b> Tải CSV/TXT. Dùng file này để đưa vào phần mềm chuyển văn bản thành giọng nói (TTS).</li>
                 </ol>
@@ -1167,7 +1198,7 @@ export default function App() {
                              </div>
                          </div>
                          <button onClick={(e) => handleDeleteSession(s.id, e)} className="p-2 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                          </button>
                      </div>
                  ))}
@@ -1201,6 +1232,63 @@ export default function App() {
                  </ThemedButton>
              </div>
          </div>
+      </Modal>
+
+      <Modal isOpen={isEvaluationModalOpen} onClose={() => setIsEvaluationModalOpen(false)} title="Đánh giá & Chấm điểm truyện">
+          {!evaluationResult ? (
+              <div className="space-y-4 text-center py-6">
+                  <div className="text-slate-300 mb-6 px-4">
+                      Vui lòng chọn chế độ đánh giá. AI sẽ đọc toàn bộ nội dung truyện hiện có và chấm điểm theo bộ tiêu chí chuyên nghiệp.
+                  </div>
+                  {loading.evaluation ? (
+                      <div className="flex flex-col items-center gap-4 text-sky-400">
+                          <svg className="animate-spin h-10 w-10" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                          <span className="animate-pulse">Đang thẩm định tác phẩm... (Có thể mất 30-60s)</span>
+                      </div>
+                  ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-4">
+                          <button 
+                              onClick={() => handleEvaluateStory('romance')}
+                              className="p-6 rounded-xl bg-pink-900/30 border border-pink-700/50 hover:bg-pink-900/50 hover:border-pink-500 transition group flex flex-col items-center gap-3"
+                          >
+                              <div className="w-12 h-12 rounded-full bg-pink-600/20 flex items-center justify-center text-pink-400 group-hover:scale-110 transition">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+                              </div>
+                              <div className="font-bold text-pink-200">Chấm điểm Ngôn Tình</div>
+                              <div className="text-xs text-pink-300/60">Tiêu chí: Hook, Chemistry, Cẩu huyết, Sảng văn...</div>
+                          </button>
+
+                          <button 
+                              onClick={() => handleEvaluateStory('general')}
+                              className="p-6 rounded-xl bg-blue-900/30 border border-blue-700/50 hover:bg-blue-900/50 hover:border-blue-500 transition group flex flex-col items-center gap-3"
+                          >
+                               <div className="w-12 h-12 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-400 group-hover:scale-110 transition">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+                              </div>
+                              <div className="font-bold text-blue-200">Chấm điểm Kịch bản</div>
+                              <div className="text-xs text-blue-300/60">Tiêu chí: Cấu trúc, Logic, Giọng văn, Ý tưởng...</div>
+                          </button>
+                      </div>
+                  )}
+              </div>
+          ) : (
+              <div className="space-y-4">
+                  <div className="p-4 rounded-lg bg-slate-950 border border-slate-800 max-h-[60vh] overflow-y-auto font-mono text-sm leading-relaxed whitespace-pre-wrap text-slate-300">
+                      {evaluationResult}
+                  </div>
+                  <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                      <button 
+                        onClick={() => setEvaluationResult(null)}
+                        className="px-4 py-2 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                      >
+                        Đánh giá lại
+                      </button>
+                      <ThemedButton onClick={() => downloadTXT(`danh_gia_${geminiService.slugify(bookTitle)}.txt`, evaluationResult)} className={`${theme.buttonPrimary} text-white`}>
+                        Tải kết quả (.txt)
+                      </ThemedButton>
+                  </div>
+              </div>
+          )}
       </Modal>
 
       {toastMessage && <Toast message={toastMessage} onClose={() => setToastMessage(null)} />}

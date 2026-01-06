@@ -54,31 +54,45 @@ export const fileToBase64 = (file: File): Promise<string> => {
 // --- PROMPT HELPERS ---
 
 const getModeInstructions = (mode: StoryMode, genre: string, isVi: boolean) => {
+    const isAuto = genre.includes("Tự động") || genre.includes("Auto");
+
     if (mode === 'romance') {
+        const genreText = isAuto 
+            ? (isVi 
+                ? "Tự do lựa chọn thể loại con (Sub-genre) phù hợp nhất với Tiêu đề và Ý tưởng của sách (VD: Tổng tài, Cổ đại, Điền văn, Xuyên không...)" 
+                : "Freely select the best sub-genre based on Book Title and Idea") 
+            : genre;
+
         return isVi ? 
-            `THỂ LOẠI: NGÔN TÌNH - ${genre}.
+            `THỂ LOẠI: NGÔN TÌNH - ${genreText}.
              TRỌNG TÂM: Cảm xúc, chemistry giữa cặp đôi chính, xung đột tình cảm, và sự phát triển mối quan hệ.
              YÊU CẦU NHÂN VẬT:
-             - Nữ chính (char1): Tên hay, có cá tính riêng (Nữ cường/Tiểu bạch/Hắc hóa tùy genre).
+             - Nữ chính (char1): Tên hay, có cá tính riêng (Nữ cường/Tiểu bạch/Hắc hóa tùy genre tự chọn).
              - Nam chính (char2): Tên hay, thâm tình/quyền lực/bảo vệ.
              - Phản diện/Tiểu tam (char3): Gây ức chế, thử thách tình yêu.` 
             : 
-            `GENRE: ROMANCE - ${genre}.
+            `GENRE: ROMANCE - ${genreText}.
              FOCUS: Emotions, chemistry, relationship arc.
              CHARACTERS:
              - Female Lead (char1): Unique personality.
              - Male Lead (char2): Deep love/Powerful.
              - Villain (char3): Creates conflict.`;
     } else {
+        const genreText = isAuto 
+            ? (isVi 
+                ? "Tự do lựa chọn thể loại con (Sub-genre) phù hợp nhất với Tiêu đề và Ý tưởng của sách (VD: Tiên hiệp, Trinh thám, Mạt thế, Khoa huyễn...)" 
+                : "Freely select the best sub-genre based on Book Title and Idea") 
+            : genre;
+
         return isVi ?
-            `THỂ LOẠI: PHI NGÔN TÌNH - ${genre}.
+            `THỂ LOẠI: PHI NGÔN TÌNH - ${genreText}.
              TRỌNG TÂM: Cốt truyện, hành động, bí ẩn, xây dựng thế giới (World-building), hoặc logic tư duy. Tình cảm chỉ là yếu tố phụ hoặc không có.
              YÊU CẦU NHÂN VẬT:
-             - Nhân vật chính (char1): Tên hay, có kỹ năng/trí tuệ/sức mạnh đặc biệt phù hợp thể loại.
+             - Nhân vật chính (char1): Tên hay, có kỹ năng/trí tuệ/sức mạnh đặc biệt phù hợp thể loại tự chọn.
              - Đồng minh/Hỗ trợ quan trọng (char2): Người đồng hành tin cậy.
              - Đối thủ/Trùm cuối (char3): Kẻ thù nguy hiểm, thông minh, tạo ra mối đe dọa thực sự.`
             :
-            `GENRE: NON-ROMANCE - ${genre}.
+            `GENRE: NON-ROMANCE - ${genreText}.
              FOCUS: Plot, action, mystery, world-building. Romance is secondary or non-existent.
              CHARACTERS:
              - Protagonist (char1): Unique skills/intelligence.
@@ -102,9 +116,6 @@ export const generateOutline = async (
     apiKey?: string
 ): Promise<{ chapters: Omit<OutlineItem, 'index'>[], metadata: StoryMetadata }> => {
     const isVi = language === 'vi';
-    const langContext = isVi 
-        ? "Ngôn ngữ đầu ra: Tiếng Việt." 
-        : "Output Language: English (US). Tone: Professional, Engaging.";
     
     let structurePrompt = "";
     if (isAutoDuration) {
@@ -198,6 +209,13 @@ export const generateOutline = async (
 };
 
 const getGenreWritingStyle = (genre: string, isVi: boolean): string => {
+    // Handle Auto Genre
+    if (genre.includes("Tự động") || genre.includes("Auto")) {
+        return isVi 
+            ? "Văn phong: Tự điều chỉnh linh hoạt để phù hợp nhất với bối cảnh và thể loại con (sub-genre) mà bạn đã xác định cho câu chuyện (VD: Nếu là Cổ đại thì văn phong hoa mỹ, nếu là Hiện đại thì gãy gọn/sắc sảo, nếu là Kinh dị thì u tối...)."
+            : "Style: Adaptive. Automatically adjust tone and style to match the specific sub-genre and setting identified from the context.";
+    }
+
     // ROMANCE STYLES
     if (genre.includes('Cổ đại') || genre.includes('Ancient')) return isVi 
         ? "Văn phong: Cổ trang, hoa mỹ, dùng từ Hán Việt hợp lý. Tả cảnh ngụ tình." 
@@ -253,8 +271,19 @@ export const generateStoryBlock = async (
            - ${metadata.label3 || 'Antagonist'}: ${metadata.char3}
            DO NOT CHANGE NAMES.`;
 
+    let genreIntro = "";
+    if (genre.includes("Tự động") || genre.includes("Auto")) {
+        genreIntro = isVi 
+           ? `Bạn là một tiểu thuyết gia xuất sắc, có khả năng viết đa dạng thể loại. Hãy tự xác định thể loại con (sub-genre) phù hợp nhất cho tác phẩm "${bookTitle}" dựa trên ý tưởng đã có.`
+           : `You are a versatile best-selling novelist. Identify the best sub-genre for "${bookTitle}" based on the idea.`;
+    } else {
+        genreIntro = isVi
+           ? `Bạn là một tiểu thuyết gia chuyên viết thể loại [${genre}].`
+           : `You are a specialized [${genre}] novelist.`;
+    }
+
     const prompt = isVi
-        ? `Bạn là một tiểu thuyết gia chuyên viết thể loại [${genre}]. Hãy viết nội dung chi tiết cho chương "${item.title}" của tác phẩm "${bookTitle}".
+        ? `${genreIntro} Hãy viết nội dung chi tiết cho chương "${item.title}" của tác phẩm "${bookTitle}".
            ${characterContext}
            ${ideaContext}
            Mục tiêu chương: "${item.focus}". Tình tiết chính: ${item.actions.join(', ')}.
@@ -264,7 +293,7 @@ export const generateStoryBlock = async (
            2. Show, don't tell. Dùng hành động để bộc lộ tính cách/cảm xúc.
            3. Chỉ viết nội dung truyện thuần túy (văn xuôi). TUYỆT ĐỐI KHÔNG chèn lời dẫn MC/Radio.
            4. Độ dài: 600-800 từ.`
-        : `You are a specialized [${genre}] novelist. Write chapter "${item.title}" for "${bookTitle}".
+        : `${genreIntro} Write chapter "${item.title}" for "${bookTitle}".
            ${characterContext}
            ${ideaContext}
            Goal: "${item.focus}". Plot points: ${item.actions.join(', ')}.
@@ -451,10 +480,6 @@ export const evaluateStory = async (
     model: string = 'gemini-3-pro-preview',
     apiKey?: string
 ): Promise<string> => {
-    // Reuse existing criteria logic, no change needed here for now as modes map correctly
-    const ROMANCE_CRITERIA = `...`; // (As before)
-    const GENERAL_CRITERIA = `...`; // (As before)
-    
     // Simple pass-through for brevity as the logic is identical to previous version, just re-declaring for context
     const criteria = mode === 'romance' 
         ? `## ✅ TIÊU CHÍ NGÔN TÌNH\n1. Hook & Lời hứa (0-10)\n2. Chemistry CP (0-10)\n3. Tiến trình cảm xúc (0-10)\n4. Logic bối cảnh (0-10)\n5. Cao trào & Điểm sảng (0-10)\n6. Văn phong (0-10)`

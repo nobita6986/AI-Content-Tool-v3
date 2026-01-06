@@ -99,11 +99,13 @@ const getThemeStyles = (color: ThemeColor) => {
 };
 
 const GENRES_ROMANCE = [
+  "Tự động (AI tự do sáng tác)",
   "Hiện đại (Đô thị, Tổng tài)", "Cổ đại (Cung đấu, Gia đấu)", "Dân Quốc", "Xuyên không", "Trọng sinh (Báo thù)", "Điền văn (Làm ruộng)", 
   "Ngọt sủng (Sweet)", "Ngược tâm (Angst)", "Sảng văn (Face-slapping)", "Cẩu huyết (Drama)", "Huyền huyễn (Fantasy Romance)"
 ];
 
 const GENRES_NON_ROMANCE = [
+  "Tự động (AI tự do sáng tác)",
   "Tiên hiệp / Tu tiên", "Huyền huyễn (Fantasy)", "Võ hiệp / Kiếm hiệp", "Khoa huyễn (Sci-Fi / Cyberpunk)", "Mạt thế (Zombie / Sinh tồn)",
   "Trinh thám / Hình sự", "Kinh dị / Linh dị", "Lịch sử / Quân sự", "Đô thị (Sự nghiệp / Thương chiến)", "Võng du (Game)"
 ];

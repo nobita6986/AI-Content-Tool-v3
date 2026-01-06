@@ -1,6 +1,6 @@
 
 import React, { useEffect, useMemo, useState, useRef } from "react";
-import { OutlineItem, ScriptBlock, StoryBlock, SEOResult, LoadingStates, Language, SavedSession, StoryMetadata } from './types';
+import { OutlineItem, ScriptBlock, StoryBlock, SEOResult, LoadingStates, Language, SavedSession, StoryMetadata, StoryMode } from './types';
 import * as geminiService from './services/geminiService';
 import { Card, Empty, LoadingOverlay, Modal, Toast, Tooltip } from './components/ui';
 
@@ -61,7 +61,6 @@ const THEME_PRESETS: Record<ThemeColor, { name: string; labelEn: string; hex: st
 
 const getThemeStyles = (color: ThemeColor) => {
   const preset = THEME_PRESETS[color];
-  // Helper to map complex colors to tailwind safe gradients
   const getGradientTo = () => {
       switch(color) {
           case 'sky': return 'blue-500';
@@ -87,7 +86,7 @@ const getThemeStyles = (color: ThemeColor) => {
     textHighlight: `text-${color}-100`,
     border: `border-${color}-900`,
     borderLight: `border-${color}-800`,
-    bgCard: "bg-slate-950", // Keep cards dark for contrast
+    bgCard: "bg-slate-950",
     bgButton: `bg-${color}-900/40`,
     bgButtonHover: `hover:bg-${color}-900/60`,
     ring: `ring-${color}-500`,
@@ -98,6 +97,16 @@ const getThemeStyles = (color: ThemeColor) => {
     badge: `bg-${color}-600 shadow-[0_0_10px_rgba(var(--color-${color}-500),0.5)]`
   };
 };
+
+const GENRES_ROMANCE = [
+  "Hiện đại (Đô thị, Tổng tài)", "Cổ đại (Cung đấu, Gia đấu)", "Dân Quốc", "Xuyên không", "Trọng sinh (Báo thù)", "Điền văn (Làm ruộng)", 
+  "Ngọt sủng (Sweet)", "Ngược tâm (Angst)", "Sảng văn (Face-slapping)", "Cẩu huyết (Drama)", "Huyền huyễn (Fantasy Romance)"
+];
+
+const GENRES_NON_ROMANCE = [
+  "Tiên hiệp / Tu tiên", "Huyền huyễn (Fantasy)", "Võ hiệp / Kiếm hiệp", "Khoa huyễn (Sci-Fi / Cyberpunk)", "Mạt thế (Zombie / Sinh tồn)",
+  "Trinh thám / Hình sự", "Kinh dị / Linh dị", "Lịch sử / Quân sự", "Đô thị (Sự nghiệp / Thương chiến)", "Võng du (Game)"
+];
 
 const INITIAL_LOADING_STATES: LoadingStates = {
   outline: false,
@@ -117,6 +126,10 @@ export default function App() {
   const [bookTitle, setBookTitle] = useState("");
   const [bookIdea, setBookIdea] = useState("");
   const [bookImage, setBookImage] = useState<string | null>(null);
+
+  // -- NEW MODE STATE --
+  const [storyMode, setStoryMode] = useState<StoryMode>('romance');
+  const [storyGenre, setStoryGenre] = useState<string>(GENRES_ROMANCE[0]);
   
   // -- Config State (Dual Language) --
   const [channelNameVi, setChannelNameVi] = useState("");
@@ -126,13 +139,10 @@ export default function App() {
 
   const [frameRatio, setFrameRatio] = useState("16:9"); 
   const [durationMin, setDurationMin] = useState(240);
-  // isAutoDuration state: Determines if we use the Auto (40-60m) mode
   const [isAutoDuration, setIsAutoDuration] = useState(false);
   
-  // -- Config State Calculation --
-  // Auto-calculate chapters: 1 chapter per ~2.5-3 mins to ensure depth (40-60k chars)
   const calculatedChapters = useMemo(() => {
-     if (isAutoDuration) return 18; // Placeholder avg for 50 mins
+     if (isAutoDuration) return 18; 
      return Math.max(3, Math.ceil(durationMin / 2.5));
   }, [durationMin, isAutoDuration]);
 
@@ -141,10 +151,7 @@ export default function App() {
   // -- Modals --
   const [isApiModalOpen, setIsApiModalOpen] = useState(false);
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
-  
-  // Replace Modal state with Dropdown state
   const [isThemeDropdownOpen, setIsThemeDropdownOpen] = useState(false);
-
   const [activeGuideTab, setActiveGuideTab] = useState<'strengths' | 'guide'>('strengths');
   const [isExtraConfigModalOpen, setIsExtraConfigModalOpen] = useState(false);
   const [isLibraryModalOpen, setIsLibraryModalOpen] = useState(false);
@@ -156,7 +163,6 @@ export default function App() {
   const [isRewriting, setIsRewriting] = useState(false);
   const [rewriteScope, setRewriteScope] = useState<'single' | 'all'>('single');
   const [rewriteProgress, setRewriteProgress] = useState<{current: number, total: number} | null>(null);
-  // Track indices of blocks that have been rewritten to highlight them
   const [rewrittenIndices, setRewrittenIndices] = useState<Set<number>>(new Set());
 
   // -- Evaluation State --
@@ -169,9 +175,7 @@ export default function App() {
 
   // -- Output Data --
   const [outline, setOutline] = useState<OutlineItem[]>([]);
-  // Store generated character names here to ensure consistency
   const [storyMetadata, setStoryMetadata] = useState<StoryMetadata | undefined>(undefined);
-  
   const [storyBlocks, setStoryBlocks] = useState<StoryBlock[]>([]);
   const [seo, setSeo] = useState<SEOResult | null>(null);
   const [scriptBlocks, setScriptBlocks] = useState<ScriptBlock[]>([]);
@@ -179,7 +183,6 @@ export default function App() {
   const [thumbTextIdeas, setThumbTextIdeas] = useState<string[]>([]);
 
   const [loading, setLoading] = useState<LoadingStates>(INITIAL_LOADING_STATES);
-  // New State for progress text
   const [progressText, setProgressText] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   
@@ -187,21 +190,23 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [sessions, setSessions] = useState<SavedSession[]>([]);
 
-  // --- DERIVED STATE ---
-  // Check if ANY AI task is currently running to disable other buttons
   const isGlobalLoading = Object.values(loading).some(Boolean) || isRewriting;
-
   const theme = useMemo(() => getThemeStyles(themeColor), [themeColor]);
   
-  // Display target chars: If Auto, show range. Else calc based on Duration (1000 chars/min)
   const totalCharsTargetStr = useMemo(() => {
       if (isAutoDuration) return "40,000 - 60,000";
       return (durationMin * 1000).toLocaleString(language === 'vi' ? "vi-VN" : "en-US");
   }, [durationMin, isAutoDuration, language]);
   
-  // Derived values based on current language
   const currentChannelName = language === 'vi' ? channelNameVi : channelNameEn;
   const currentMcName = language === 'vi' ? mcNameVi : mcNameEn;
+
+  // Handle Mode Change
+  const handleModeChange = (mode: StoryMode) => {
+    setStoryMode(mode);
+    // Reset genre to first item of new mode
+    setStoryGenre(mode === 'romance' ? GENRES_ROMANCE[0] : GENRES_NON_ROMANCE[0]);
+  };
 
   // --- INITIAL LOAD & GLOBAL CONFIG ---
   useEffect(() => {
@@ -217,13 +222,12 @@ export default function App() {
       setThemeColor(storedTheme as ThemeColor);
     }
 
-    // Configs (VI)
+    // Configs
     const storedChannelVi = localStorage.getItem("nd_channel_name_vi");
     const storedMcVi = localStorage.getItem("nd_mc_name_vi");
     if (storedChannelVi) setChannelNameVi(storedChannelVi);
     if (storedMcVi) setMcNameVi(storedMcVi);
 
-    // Configs (EN) - fallbacks to simple keys if legacy, otherwise specific keys
     const storedChannelEn = localStorage.getItem("nd_channel_name_en");
     const storedMcEn = localStorage.getItem("nd_mc_name_en");
     if (storedChannelEn) setChannelNameEn(storedChannelEn);
@@ -265,19 +269,14 @@ export default function App() {
     setIsThemeDropdownOpen(false);
   };
 
-  // Switch language and randomize theme
   const toggleLanguage = () => {
     setLanguage(prev => {
         const newLang = prev === 'vi' ? 'en' : 'vi';
-        
-        // Randomly pick a new color different from current
         const allColors = Object.keys(THEME_PRESETS) as ThemeColor[];
         const availableColors = allColors.filter(c => c !== themeColor);
         const randomColor = availableColors[Math.floor(Math.random() * availableColors.length)];
-        
         setThemeColor(randomColor);
         localStorage.setItem("nd_theme_color", randomColor);
-        
         return newLang;
     });
   };
@@ -299,20 +298,22 @@ export default function App() {
             lastModified: Date.now(),
             bookTitle,
             language,
+            storyMode,
+            genre: storyGenre,
             bookIdea,
             bookImage,
             durationMin,
             isAutoDuration,
             chaptersCount: calculatedChapters,
             frameRatio,
-            storyMetadata, // Save metadata
+            storyMetadata,
             outline,
             storyBlocks,
             scriptBlocks,
             seo,
             videoPrompts,
             thumbTextIdeas,
-            evaluationResult, // Save evaluation result
+            evaluationResult,
         };
 
         setSessions(prev => {
@@ -321,26 +322,24 @@ export default function App() {
             localStorage.setItem("nd_sessions", JSON.stringify(updated));
             return updated;
         });
-    }, 2000); // Auto-save after 2 seconds
+    }, 2000); 
 
     return () => {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [bookTitle, bookIdea, bookImage, durationMin, isAutoDuration, calculatedChapters, frameRatio, outline, storyMetadata, storyBlocks, scriptBlocks, seo, videoPrompts, thumbTextIdeas, language, sessionId, evaluationResult]);
+  }, [bookTitle, bookIdea, bookImage, durationMin, isAutoDuration, calculatedChapters, frameRatio, outline, storyMetadata, storyBlocks, scriptBlocks, seo, videoPrompts, thumbTextIdeas, language, sessionId, evaluationResult, storyMode, storyGenre]);
 
-  // HELPER: Force update session immediately (skip debounce)
-  // Useful for real-time saving during batch processes like Rewrite/Evaluation
   const saveSessionImmediate = (overrides?: Partial<SavedSession>) => {
       const currentId = sessionId || crypto.randomUUID();
       if (!sessionId) setSessionId(currentId);
 
-      // Construct session with current state, merging overrides
-      // Note: We use the variables from the component scope (closures)
       const newSession: SavedSession = {
           id: currentId,
           lastModified: Date.now(),
           bookTitle,
           language,
+          storyMode,
+          genre: storyGenre,
           bookIdea,
           bookImage,
           durationMin,
@@ -370,20 +369,25 @@ export default function App() {
       setSessionId(s.id);
       setBookTitle(s.bookTitle);
       setLanguage(s.language);
+      
+      // Load Mode and Genre
+      setStoryMode(s.storyMode || 'romance');
+      setStoryGenre(s.genre || (s.storyMode === 'non-romance' ? GENRES_NON_ROMANCE[0] : GENRES_ROMANCE[0]));
+
       setBookIdea(s.bookIdea);
       setBookImage(s.bookImage);
       setDurationMin(s.durationMin);
       setIsAutoDuration(!!s.isAutoDuration);
       setFrameRatio(s.frameRatio || "16:9");
-      setStoryMetadata(s.storyMetadata); // Load metadata
+      setStoryMetadata(s.storyMetadata); 
       setOutline(s.outline || []);
       setStoryBlocks(s.storyBlocks || []);
       setScriptBlocks(s.scriptBlocks || []);
       setSeo(s.seo);
       setVideoPrompts(s.videoPrompts || []);
       setThumbTextIdeas(s.thumbTextIdeas || []);
-      setRewrittenIndices(new Set()); // Clear highlights on load
-      setEvaluationResult(s.evaluationResult || null); // Load evaluation result
+      setRewrittenIndices(new Set()); 
+      setEvaluationResult(s.evaluationResult || null);
       
       setIsLibraryModalOpen(false);
       setToastMessage(`Đã tải lại phiên làm việc: "${s.bookTitle}"`);
@@ -413,22 +417,15 @@ export default function App() {
       setVideoPrompts([]);
       setThumbTextIdeas([]);
       setIsAutoDuration(false);
-      setRewrittenIndices(new Set()); // Clear highlights
-      setEvaluationResult(null); // Clear evaluation result
+      setRewrittenIndices(new Set()); 
+      setEvaluationResult(null); 
+      setStoryMode('romance');
+      setStoryGenre(GENRES_ROMANCE[0]);
       setToastMessage("Đã tạo phiên làm việc mới.");
   }
 
-
   // --- HANDLERS ---
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setBookImage(reader.result as string);
-    reader.readAsDataURL(file);
-  };
-
+  
   const handleStoryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -448,11 +445,11 @@ export default function App() {
             }));
             setStoryBlocks(newBlocks);
             setOutline([]); 
-            setStoryMetadata(undefined); // Reset metadata on upload
+            setStoryMetadata(undefined); 
             setScriptBlocks([]); 
-            setRewrittenIndices(new Set()); // Clear highlights
+            setRewrittenIndices(new Set()); 
             setIsStoryUploaded(true);
-            setToastMessage(`Đã upload truyện "${fileName}" thành công. Dữ liệu đã được lưu vào thư viện.`);
+            setToastMessage(`Đã upload truyện "${fileName}" thành công.`);
             e.target.value = ''; 
         }
     };
@@ -465,14 +462,10 @@ export default function App() {
         setError("Vui lòng nhập tên sách trước.");
         return;
       }
-      if (selectedModel.startsWith("gpt") && !apiKeyOpenAI) {
-        setError("Vui lòng nhập OpenAI API Key để sử dụng các model ChatGPT.");
-        return;
-      }
       
       setError(null);
       setLoading(prev => ({ ...prev, [key]: true }));
-      setProgressText(""); // Reset progress text on new start
+      setProgressText(""); 
       try {
         return await fn(...args);
       } catch (err) {
@@ -486,11 +479,23 @@ export default function App() {
   };
 
   const handleGenerateOutline = withErrorHandling(async () => {
-    const result = await geminiService.generateOutline(bookTitle, bookIdea, currentChannelName, currentMcName, calculatedChapters, durationMin, language, isAutoDuration, selectedModel, apiKeyGemini);
-    // Result now returns { chapters: ..., metadata: ... }
+    const result = await geminiService.generateOutline(
+        bookTitle, 
+        bookIdea, 
+        currentChannelName, 
+        currentMcName, 
+        calculatedChapters, 
+        durationMin, 
+        language, 
+        storyMode,
+        storyGenre,
+        isAutoDuration, 
+        selectedModel, 
+        apiKeyGemini
+    );
     const indexedChapters = result.chapters.map((item, index) => ({ ...item, index }));
     setOutline(indexedChapters);
-    setStoryMetadata(result.metadata); // Store the generated characters
+    setStoryMetadata(result.metadata);
     setStoryBlocks([]);
     setScriptBlocks([]);
     setRewrittenIndices(new Set());
@@ -504,21 +509,33 @@ export default function App() {
         return;
     }
     
-    // Check if we have metadata. If we uploaded a story or have an old session without metadata, we might need a fallback.
-    // However, if outline exists from AI, metadata should exist.
-    const safeMetadata = storyMetadata || { femaleLead: "Nữ chính", maleLead: "Nam chính", villain: "Phản diện" };
+    // Default fallback metadata based on mode
+    const defaultMeta: StoryMetadata = storyMode === 'romance' 
+        ? { char1: "Nữ chính", char2: "Nam chính", char3: "Phản diện", label1: "Nữ chính", label2: "Nam chính", label3: "Phản diện" }
+        : { char1: "Nhân vật chính", char2: "Đồng minh", char3: "Đối thủ", label1: "NV Chính", label2: "Đồng minh", label3: "Đối thủ" };
+
+    const safeMetadata = storyMetadata || defaultMeta;
 
     setStoryBlocks([]);
-    setRewrittenIndices(new Set()); // Reset highlights
+    setRewrittenIndices(new Set()); 
     
-    // Running buffer for updates
     const runningBlocks: StoryBlock[] = [];
 
     for (let i = 0; i < outline.length; i++) {
         const item = outline[i];
         setProgressText(`Đang viết chương ${i + 1}/${outline.length}...`);
         
-        const content = await geminiService.generateStoryBlock(item, safeMetadata, bookTitle, bookIdea, language, selectedModel, apiKeyGemini);
+        const content = await geminiService.generateStoryBlock(
+            item, 
+            safeMetadata, 
+            bookTitle, 
+            bookIdea, 
+            language, 
+            storyMode,
+            storyGenre,
+            selectedModel, 
+            apiKeyGemini
+        );
         
         const newBlock = {
             index: item.index,
@@ -526,16 +543,13 @@ export default function App() {
             content: content
         };
         runningBlocks.push(newBlock);
-        
-        // Update state progressively to show results as they come in
         setStoryBlocks([...runningBlocks]);
     }
-    // Final session update happens via useEffect
   }, 'story');
 
   const handleGenerateReviewScript = withErrorHandling(async () => {
     if (storyBlocks.length === 0) {
-        setError("Chưa có nội dung truyện. Vui lòng 'Viết Truyện' hoặc Upload file trước.");
+        setError("Chưa có nội dung truyện.");
         setLoading(prev => ({ ...prev, script: false }));
         return;
     }
@@ -574,7 +588,6 @@ export default function App() {
   }, 'prompts');
 
   const handleEvaluateStory = withErrorHandling(async (mode: 'romance' | 'general') => {
-      // Collect full story text
       if (storyBlocks.length === 0) {
           throw new Error("Chưa có nội dung truyện để đánh giá.");
       }
@@ -582,12 +595,11 @@ export default function App() {
       const fullText = storyBlocks.map(b => `### ${b.title}\n${b.content}`).join("\n\n");
       const result = await geminiService.evaluateStory(fullText, mode, bookTitle, selectedModel, apiKeyGemini);
       setEvaluationResult(result);
-      // Force save immediately to ensure evaluation result is persisted
       saveSessionImmediate({ evaluationResult: result });
       setToastMessage("Đã hoàn tất đánh giá và lưu vào thư viện.");
   }, 'evaluation');
 
-  // --- REWRITE LOGIC ---
+  // --- REWRITE ---
   const openRewriteModal = (index: number) => {
     setRewriteScope('single');
     setEditingBlockIndex(index);
@@ -602,57 +614,36 @@ export default function App() {
     setIsRewriteModalOpen(true);
   };
   
-  // New function to transfer evaluation to rewrite logic
   const handleRewriteFromEvaluation = () => {
      if (!evaluationResult) return;
-     
      let cleanedResult = evaluationResult;
-     
-     // Attempt to filter out the conversational intro (e.g. "Hello...", "I have read...")
-     // Look for specific keywords or markdown headers that start the actual content
      const markers = ["BẢNG ĐÁNH GIÁ", "TIÊU CHÍ", "## 1", "### 1"];
-     
-     // Find the earliest occurrence of a marker
      let cutIndex = -1;
      for (const marker of markers) {
          const idx = cleanedResult.toUpperCase().indexOf(marker);
-         if (idx !== -1) {
-             // If we found a marker, use it
-             cutIndex = idx;
-             break;
-         }
+         if (idx !== -1) { cutIndex = idx; break; }
      }
-     
-     // Fallback: If no specific keyword, look for the first major markdown header
      if (cutIndex === -1) {
           const headerIdx = cleanedResult.indexOf("## ");
           if (headerIdx !== -1) cutIndex = headerIdx;
      }
-
-     if (cutIndex !== -1) {
-         cleanedResult = cleanedResult.substring(cutIndex);
-     }
+     if (cutIndex !== -1) cleanedResult = cleanedResult.substring(cutIndex);
      
-     // Pre-fill prompt with context
      setRewriteFeedback(`Dựa trên kết quả đánh giá dưới đây, hãy viết lại toàn bộ truyện để khắc phục các điểm yếu:\n\n${cleanedResult}`);
-     
      setRewriteScope('all');
      setEditingBlockIndex(null);
-     setIsEvaluationModalOpen(false); // Close Evaluation Modal
-     setIsRewriteModalOpen(true); // Open Rewrite Modal
+     setIsEvaluationModalOpen(false); 
+     setIsRewriteModalOpen(true); 
   };
 
-  const openEvaluationModal = () => {
-      // Don't clear evaluationResult here, so user can see previous results
-      setIsEvaluationModalOpen(true);
-  }
+  const openEvaluationModal = () => setIsEvaluationModalOpen(true);
 
   const handleRewriteSubmit = async () => {
     if (!rewriteFeedback.trim()) return;
     
-    setIsRewriteModalOpen(false); // Close modal immediately
+    setIsRewriteModalOpen(false); 
     setIsRewriting(true);
-    setToastMessage("Đang tiến hành viết lại nội dung..."); // Notify user
+    setToastMessage("Đang tiến hành viết lại nội dung..."); 
     setError(null);
 
     try {
@@ -670,28 +661,20 @@ export default function App() {
             setStoryBlocks(prev => {
                 const updated = [...prev];
                 updated[editingBlockIndex] = { ...updated[editingBlockIndex], content: newContent };
-                
-                // Call immediate save here to ensure library is updated
                 saveSessionImmediate({ storyBlocks: updated });
-                
                 return updated;
             });
-            // Mark as rewritten
             setRewrittenIndices(prev => new Set(prev).add(editingBlockIndex));
             setToastMessage("Đã viết lại đoạn truyện thành công!");
         } else if (rewriteScope === 'all') {
              setRewriteProgress({ current: 0, total: storyBlocks.length });
-             setRewrittenIndices(new Set()); // Clear old highlights when starting new batch
-             
-             // Maintain a local copy of blocks to persist progress accumulatively
+             setRewrittenIndices(new Set()); 
              const runningBlocks = [...storyBlocks];
 
-             // Process sequentially to ensure stability
              for (let i = 0; i < storyBlocks.length; i++) {
                  try {
                     const block = storyBlocks[i];
                     setProgressText(`Đang sửa chương ${i + 1}/${storyBlocks.length}...`);
-                    
                     const newContent = await geminiService.rewriteStoryBlock(
                         block.content,
                         rewriteFeedback,
@@ -700,23 +683,12 @@ export default function App() {
                         selectedModel,
                         apiKeyGemini
                     );
-                    
-                    // Update running accumulator
                     runningBlocks[i] = { ...runningBlocks[i], content: newContent };
-
                     setStoryBlocks([...runningBlocks]);
-                    
-                    // IMMEDIATE SESSION UPDATE
                     saveSessionImmediate({ storyBlocks: runningBlocks });
-
-                    // Update indices set to highlight UI immediately
                     setRewrittenIndices(prev => new Set(prev).add(i));
-                    
                     setRewriteProgress({ current: i + 1, total: storyBlocks.length });
-                 } catch (e) {
-                     console.error(`Error rewriting block ${i}`, e);
-                     // Continue to next block even if one fails
-                 }
+                 } catch (e) { console.error(`Error rewriting block ${i}`, e); }
              }
              setToastMessage("Đã hoàn tất viết lại toàn bộ truyện.");
              setRewriteProgress(null);
@@ -731,8 +703,6 @@ export default function App() {
   };
 
   const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
-  const fmtNumber = (n: number) => n.toLocaleString(language === 'vi' ? "vi-VN" : "en-US");
-
   const downloadCSV = (filename: string, rows: (string[])[]) => {
     const processRow = (row: string[]) => row.map(v => `"${(v ?? "").replace(/"/g, '""')}"`).join(",");
     const csvContent = "\uFEFF" + rows.map(processRow).join("\r\n");
@@ -743,7 +713,6 @@ export default function App() {
     link.click();
     URL.revokeObjectURL(link.href);
   };
-  
   const downloadTXT = (filename: string, content: string) => {
       const blob = new Blob([content], { type: 'text/plain;charset=utf-8;' });
       const link = document.createElement("a");
@@ -753,37 +722,12 @@ export default function App() {
       URL.revokeObjectURL(link.href);
   };
 
-  const exportScriptCSV = () => {
-    if (!scriptBlocks.length) return;
-    const rows = [["STT", "Chương", "Review Script"], ...scriptBlocks.map(b => [String(b.index), b.chapter, b.text])];
-    downloadCSV(`review_${geminiService.slugify(bookTitle)}.csv`, rows);
-  };
-  
-  const exportScriptTXT = () => {
-    if (!scriptBlocks.length) return;
-    const content = scriptBlocks.map(b => `${b.chapter.toUpperCase()} [${b.chars} chars]\n\n${b.text}`).join("\n\n" + "-".repeat(40) + "\n\n");
-    downloadTXT(`review_${geminiService.slugify(bookTitle)}.txt`, content);
-  };
+  const exportScriptCSV = () => { if (!scriptBlocks.length) return; const rows = [["STT", "Chương", "Review Script"], ...scriptBlocks.map(b => [String(b.index), b.chapter, b.text])]; downloadCSV(`review_${geminiService.slugify(bookTitle)}.csv`, rows); };
+  const exportScriptTXT = () => { if (!scriptBlocks.length) return; const content = scriptBlocks.map(b => `${b.chapter.toUpperCase()} [${b.chars} chars]\n\n${b.text}`).join("\n\n" + "-".repeat(40) + "\n\n"); downloadTXT(`review_${geminiService.slugify(bookTitle)}.txt`, content); };
+  const exportStoryCSV = () => { if (!storyBlocks.length) return; const rows = [["STT", "Chương", "Nội dung Truyện"], ...storyBlocks.map(b => [String(b.index), b.title, b.content])]; downloadCSV(`truyen_${geminiService.slugify(bookTitle)}.csv`, rows); };
+  const exportStoryTXT = () => { if (!storyBlocks.length) return; const content = storyBlocks.map(b => `${b.title.toUpperCase()}\n\n${b.content}`).join("\n\n" + "-".repeat(40) + "\n\n"); downloadTXT(`truyen_${geminiService.slugify(bookTitle)}.txt`, content); };
+  const exportPromptCSV = () => { if (!videoPrompts.length) return; const rows = [["STT", "Prompt"], ...videoPrompts.map((p, i) => [String(i + 1), p])]; downloadCSV(`prompts_${geminiService.slugify(bookTitle)}.csv`, rows); };
 
-  const exportStoryCSV = () => {
-    if (!storyBlocks.length) return;
-    const rows = [["STT", "Chương", "Nội dung Truyện"], ...storyBlocks.map(b => [String(b.index), b.title, b.content])];
-    downloadCSV(`truyen_${geminiService.slugify(bookTitle)}.csv`, rows);
-  };
-  
-  const exportStoryTXT = () => {
-    if (!storyBlocks.length) return;
-    const content = storyBlocks.map(b => `${b.title.toUpperCase()}\n\n${b.content}`).join("\n\n" + "-".repeat(40) + "\n\n");
-    downloadTXT(`truyen_${geminiService.slugify(bookTitle)}.txt`, content);
-  };
-
-  const exportPromptCSV = () => {
-    if (!videoPrompts.length) return;
-    const rows = [["STT", "Prompt"], ...videoPrompts.map((p, i) => [String(i + 1), p])];
-    downloadCSV(`prompts_${geminiService.slugify(bookTitle)}.csv`, rows);
-  };
-
-  // Reusable themed button
   const ThemedButton: React.FC<{ children: React.ReactNode, onClick: () => void, disabled?: boolean, className?: string, title?: string }> = ({ children, onClick, disabled, className, title }) => (
     <button
       className={`inline-flex items-center justify-center gap-2 rounded-lg border ${theme.borderLight} ${theme.bgButton} px-3 py-2 text-sm font-semibold transition ${theme.bgButtonHover} disabled:opacity-50 disabled:cursor-not-allowed ${className || ''}`}
@@ -806,17 +750,13 @@ export default function App() {
           </a>
           
           <div className="flex items-center gap-3">
-              {/* Language Toggle */}
               <button
                 onClick={toggleLanguage}
                 className={`relative w-16 h-8 rounded-full border ${theme.borderLight} ${theme.bgCard} flex items-center transition-all hover:opacity-90 shadow-inner`}
                 title="Click để đổi ngôn ngữ / Click to switch language"
               >
-                  {/* Background labels */}
                   <span className={`absolute left-2 text-[9px] font-bold ${language === 'vi' ? 'opacity-0' : 'opacity-60 text-slate-400'}`}>VN</span>
                   <span className={`absolute right-2 text-[9px] font-bold ${language === 'en' ? 'opacity-0' : 'opacity-60 text-slate-400'}`}>US</span>
-                  
-                  {/* Sliding Knob */}
                   <div className={`absolute left-1 w-6 h-6 rounded-full shadow-lg flex items-center justify-center text-[10px] font-bold text-white transition-all duration-300 transform ${
                       language === 'en' ? 'translate-x-8' : 'translate-x-0'
                   } ${language === 'vi' ? 'bg-sky-600 shadow-[0_0_8px_rgba(2,132,199,0.6)]' : 'bg-emerald-600 shadow-[0_0_8px_rgba(5,150,105,0.6)]'}`}>
@@ -824,7 +764,6 @@ export default function App() {
                   </div>
               </button>
               
-               {/* Theme Button Dropdown */}
                <div className="relative">
                  <button 
                   onClick={() => setIsThemeDropdownOpen(!isThemeDropdownOpen)}
@@ -856,7 +795,6 @@ export default function App() {
                 )}
                </div>
 
-              {/* Library Button */}
               <button 
                 onClick={() => setIsLibraryModalOpen(true)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-full ${theme.bgCard}/80 border ${theme.borderLight} ${theme.textAccent} text-sm font-medium hover:${theme.bgButton} hover:text-white transition shadow-lg relative`}
@@ -888,6 +826,45 @@ export default function App() {
         <section className="lg:col-span-1 space-y-6">
           <Card title="1) Thông tin sách & Cài đặt">
             <div className="space-y-4">
+               {/* --- MODE & GENRE SELECTOR --- */}
+               <div className={`p-3 rounded-lg border ${theme.borderLight} bg-slate-900/40 space-y-3`}>
+                  {/* Toggle Mode */}
+                  <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800 relative">
+                     <div 
+                        className={`absolute top-1 bottom-1 w-[50%] rounded transition-all duration-300 ${theme.bgButton} border border-white/10`}
+                        style={{ left: storyMode === 'romance' ? '4px' : 'calc(50% - 4px)' }}
+                     ></div>
+                     <button 
+                        onClick={() => handleModeChange('romance')}
+                        className={`flex-1 relative z-10 text-xs font-bold py-1.5 text-center transition-colors ${storyMode === 'romance' ? 'text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                     >
+                        NGÔN TÌNH (Romance)
+                     </button>
+                     <button 
+                        onClick={() => handleModeChange('non-romance')}
+                        className={`flex-1 relative z-10 text-xs font-bold py-1.5 text-center transition-colors ${storyMode === 'non-romance' ? 'text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                     >
+                        PHI NGÔN TÌNH
+                     </button>
+                  </div>
+
+                  {/* Genre Dropdown */}
+                  <div>
+                    <label className={`block text-xs font-medium ${theme.textAccent} mb-1`}>
+                      Thể loại cụ thể (Phong cách viết sẽ thay đổi theo)
+                    </label>
+                    <select 
+                        value={storyGenre} 
+                        onChange={(e) => setStoryGenre(e.target.value)}
+                        className={`w-full rounded bg-slate-950 border ${theme.border} text-sm text-slate-200 px-3 py-2 outline-none focus:ring-1 ${theme.ring}`}
+                    >
+                        {(storyMode === 'romance' ? GENRES_ROMANCE : GENRES_NON_ROMANCE).map(g => (
+                            <option key={g} value={g}>{g}</option>
+                        ))}
+                    </select>
+                  </div>
+               </div>
+
               <div>
                 <label className={`block text-sm font-medium ${theme.textAccent} mb-1 flex items-center`}>
                   Tên sách / Chủ đề
@@ -999,12 +976,12 @@ export default function App() {
              {loading.outline && <LoadingOverlay message="Đang tạo Kịch bản khung..." />}
              {outline.length === 0 ? <Empty text="Chưa có Kịch bản khung. Nhấn ‘Phân tích & Tạo Kịch bản khung’." /> : (
               <div>
-                {/* Character Metadata Display */}
+                {/* Character Metadata Display - DYNAMIC BASED ON MODE */}
                 {storyMetadata && (
                    <div className={`mb-4 p-3 rounded-lg ${theme.subtleBg} border border-dashed ${theme.border} text-sm grid grid-cols-1 md:grid-cols-3 gap-2`}>
-                      <div><span className="opacity-60 text-xs uppercase block">Nữ Chính</span><span className="font-semibold text-sky-200">{storyMetadata.femaleLead}</span></div>
-                      <div><span className="opacity-60 text-xs uppercase block">Nam Chính</span><span className="font-semibold text-emerald-200">{storyMetadata.maleLead}</span></div>
-                      <div><span className="opacity-60 text-xs uppercase block">Phản Diện</span><span className="font-semibold text-red-300">{storyMetadata.villain}</span></div>
+                      <div><span className="opacity-60 text-xs uppercase block">{storyMetadata.label1 || 'NV 1'}</span><span className="font-semibold text-sky-200">{storyMetadata.char1}</span></div>
+                      <div><span className="opacity-60 text-xs uppercase block">{storyMetadata.label2 || 'NV 2'}</span><span className="font-semibold text-emerald-200">{storyMetadata.char2}</span></div>
+                      <div><span className="opacity-60 text-xs uppercase block">{storyMetadata.label3 || 'NV 3'}</span><span className="font-semibold text-red-300">{storyMetadata.char3}</span></div>
                    </div>
                 )}
                 <ol className="space-y-3 list-decimal ml-5">
@@ -1044,7 +1021,12 @@ export default function App() {
                </ThemedButton>
                
                <ThemedButton 
-                  onClick={openEvaluationModal} 
+                  onClick={() => {
+                      setIsEvaluationModalOpen(true);
+                      if (!evaluationResult) {
+                         handleEvaluateStory(storyMode === 'romance' ? 'romance' : 'general');
+                      }
+                  }}
                   disabled={(isGlobalLoading && !loading.evaluation) || storyBlocks.length === 0}
                   className="text-xs px-2 py-1 h-8 bg-purple-700/40 border-purple-600/50 hover:bg-purple-600/60"
                   title="Chấm điểm và nhận xét truyện"
@@ -1095,7 +1077,8 @@ export default function App() {
                 )}
             </div>
           </Card>
-
+          
+          {/* ... Remaining cards (Script, SEO, Prompts) are unchanged in logic but included in full code block ... */}
           <Card title="5) Review Script (Kịch bản Audio)" actions={
              <div className="flex gap-2">
                <ThemedButton onClick={exportScriptCSV} disabled={scriptBlocks.length === 0} className="text-xs px-2 py-1 h-8">Tải CSV</ThemedButton>
@@ -1175,6 +1158,7 @@ export default function App() {
         </section>
       </main>
 
+      {/* ... Modals (API, Guide, ExtraConfig, Library, Rewrite, Evaluation) remain largely same structure but are included to maintain file integrity ... */}
       <Modal isOpen={isApiModalOpen} onClose={() => setIsApiModalOpen(false)} title="API Configuration">
         <div className="space-y-4">
             <div className={`p-3 rounded-lg border ${theme.borderLight} bg-blue-900/10 text-sm`}>
@@ -1184,7 +1168,6 @@ export default function App() {
                     <li><b>OpenAI (Optional):</b> Truy cập <a href="https://platform.openai.com/api-keys" target="_blank" className="text-blue-400 hover:underline">OpenAI Platform</a>.</li>
                 </ul>
             </div>
-            
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1">Google Gemini API Key (Required)</label>
               <input type="password" value={apiKeyGemini} onChange={(e) => setApiKeyGemini(e.target.value)} className={`w-full rounded border ${theme.border} bg-slate-950 px-3 py-2 text-white focus:ring-2 ${theme.ring}`} placeholder="AIza..." />
@@ -1193,7 +1176,6 @@ export default function App() {
               <label className="block text-sm font-medium text-slate-300 mb-1">OpenAI API Key (Optional)</label>
               <input type="password" value={apiKeyOpenAI} onChange={(e) => setApiKeyOpenAI(e.target.value)} className={`w-full rounded border ${theme.border} bg-slate-950 px-3 py-2 text-white focus:ring-2 ${theme.ring}`} placeholder="sk-..." />
             </div>
-            
             <div className="pt-2 flex justify-end">
                 <ThemedButton onClick={handleSaveKeys} className={`${theme.buttonPrimary} text-white`}>Lưu API Key</ThemedButton>
             </div>
@@ -1210,22 +1192,21 @@ export default function App() {
              <div className="space-y-4 text-sm text-slate-300">
                <p>Tool này được thiết kế tối ưu cho việc làm content YouTube số lượng lớn (Industrial Scale) nhưng vẫn giữ chất lượng cao:</p>
                <ul className="list-disc ml-5 space-y-2">
-                   <li><b>Consistency (Nhất quán):</b> Metadata nhân vật (Tên, Tính cách) được lưu và truyền xuyên suốt qua các prompt. Không bị tình trạng chap 1 tên A, chap 2 tên B.</li>
-                   <li><b>Deep Content:</b> Thay vì viết một lèo, tool chia nhỏ outline và viết từng chương chi tiết (500-700 từ/chương), đảm bảo độ sâu tâm lý.</li>
-                   <li><b>Review Automation:</b> Tự động đóng vai MC để viết lời dẫn cho Audio, tiết kiệm 50% thời gian biên tập.</li>
-                   <li><b>SEO & Visual:</b> Tự động sinh Prompt ảnh/video phù hợp với bối cảnh truyện, sẵn sàng cho khâu edit.</li>
-                   <li><b>Thẩm định chất lượng:</b> Chế độ "Đánh giá" đóng vai biên tập viên khó tính, soi lỗi logic/văn phong và cho phép AI tự động viết lại theo nhận xét đó.</li>
-                   <li><b>Lưu trữ an toàn:</b> Hệ thống tự động lưu (Auto-save) vào Thư viện, không lo mất dữ liệu.</li>
+                   <li><b>Đa dạng Thể loại:</b> Hỗ trợ cả Ngôn tình (tình cảm) và Phi ngôn tình (hành động, kinh dị, tiên hiệp) với phong cách viết được tùy biến riêng.</li>
+                   <li><b>Consistency (Nhất quán):</b> Metadata nhân vật được lưu và truyền xuyên suốt qua các prompt.</li>
+                   <li><b>Deep Content:</b> Thay vì viết một lèo, tool chia nhỏ outline và viết từng chương chi tiết.</li>
+                   <li><b>Review Automation:</b> Tự động đóng vai MC để viết lời dẫn cho Audio.</li>
+                   <li><b>Thẩm định chất lượng:</b> Chế độ "Đánh giá" và "Sửa lại" thông minh.</li>
                </ul>
             </div>
         ) : (
              <div className="space-y-4 text-sm text-slate-300">
                 <ol className="list-decimal ml-5 space-y-3">
-                   <li><b>Cài đặt:</b> Nhập API Key. Cấu hình Tên Kênh/MC để lời dẫn tự nhiên hơn.</li>
-                   <li><b>Lên ý tưởng:</b> Nhập tên sách/chủ đề (có thể chọn chế độ Tự động tính thời lượng). Nhấn "Tạo Kịch bản khung". AI sẽ đề xuất dàn ý + nhân vật.</li>
-                   <li><b>Viết truyện:</b> Nhấn "Viết Truyện". AI sẽ viết lần lượt từng chương dựa trên Kịch bản khung đã duyệt.</li>
-                   <li><b>Kiểm định & Tối ưu (Mới):</b> Dùng tính năng "Đánh giá" để chấm điểm. Sau đó nhấn "Viết lại theo đánh giá" để AI tự động sửa toàn bộ truyện.</li>
-                   <li><b>Thư viện & Xuất file:</b> Truyện được tự động lưu. Tải CSV/TXT để đưa vào phần mềm chuyển văn bản thành giọng nói (TTS).</li>
+                   <li><b>Cài đặt:</b> Nhập API Key. Cấu hình Tên Kênh/MC.</li>
+                   <li><b>Lên ý tưởng:</b> Chọn Chế độ (Ngôn tình/Phi ngôn tình) và Thể loại cụ thể. Nhập tên sách/chủ đề. Nhấn "Tạo Kịch bản khung".</li>
+                   <li><b>Viết truyện:</b> Nhấn "Viết Truyện". AI sẽ viết lần lượt từng chương với văn phong phù hợp thể loại đã chọn.</li>
+                   <li><b>Kiểm định & Tối ưu:</b> Dùng tính năng "Đánh giá" để chấm điểm, sau đó "Viết lại".</li>
+                   <li><b>Thư viện & Xuất file:</b> Truyện được tự động lưu. Tải CSV/TXT.</li>
                 </ol>
              </div>
         )}
@@ -1246,7 +1227,6 @@ export default function App() {
                   </div>
                </div>
             </div>
-
              <div className="p-3 rounded bg-slate-950/50 border border-slate-800">
                <h4 className="text-sm font-semibold text-emerald-300 mb-3 border-b border-slate-800 pb-1">Configuration for English (US Mode)</h4>
                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1260,7 +1240,6 @@ export default function App() {
                   </div>
                </div>
             </div>
-
             <div className="pt-2 flex justify-end">
                 <ThemedButton onClick={handleSaveExtraConfig} className={`${theme.buttonPrimary} text-white`}>Lưu Cấu Hình</ThemedButton>
             </div>
@@ -1277,10 +1256,10 @@ export default function App() {
                          <div>
                              <div className="font-medium text-sky-100">{s.bookTitle || "Không tên"}</div>
                              <div className="text-xs text-slate-500 mt-1 flex gap-2">
-                                 <span>{new Date(s.lastModified).toLocaleDateString()} {new Date(s.lastModified).toLocaleTimeString()}</span>
+                                 <span>{new Date(s.lastModified).toLocaleDateString()}</span>
+                                 <span>• {s.genre || (s.storyMode === 'romance' ? 'Ngôn tình' : 'Phi ngôn tình')}</span>
                                  <span>• {s.chaptersCount} chương</span>
-                                 <span>• {s.language.toUpperCase()}</span>
-                                 {s.evaluationResult && <span className="text-purple-400">• Đã chấm điểm</span>}
+                                 {s.evaluationResult && <span className="text-purple-400">• Đã chấm</span>}
                              </div>
                          </div>
                          <button onClick={(e) => handleDeleteSession(s.id, e)} className="p-2 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition">
@@ -1323,36 +1302,36 @@ export default function App() {
       <Modal isOpen={isEvaluationModalOpen} onClose={() => setIsEvaluationModalOpen(false)} title="Đánh giá & Chấm điểm truyện">
           {!evaluationResult ? (
               <div className="space-y-4 text-center py-6">
-                  <div className="text-slate-300 mb-6 px-4">
-                      Vui lòng chọn chế độ đánh giá. AI sẽ đọc toàn bộ nội dung truyện hiện có và chấm điểm theo bộ tiêu chí chuyên nghiệp.
-                  </div>
                   {loading.evaluation ? (
                       <div className="flex flex-col items-center gap-4 text-sky-400">
                           <svg className="animate-spin h-10 w-10" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                           <span className="animate-pulse">Đang thẩm định tác phẩm... (Có thể mất 30-60s)</span>
                       </div>
                   ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-4">
+                      <div className="flex justify-center px-4">
                           <button 
-                              onClick={() => handleEvaluateStory('romance')}
-                              className="p-6 rounded-xl bg-pink-900/30 border border-pink-700/50 hover:bg-pink-900/50 hover:border-pink-500 transition group flex flex-col items-center gap-3"
+                              onClick={() => handleEvaluateStory(storyMode === 'romance' ? 'romance' : 'general')}
+                              className={`p-6 rounded-xl w-full border transition group flex flex-col items-center gap-3 ${
+                                  storyMode === 'romance' 
+                                  ? 'bg-pink-900/30 border-pink-700/50 hover:bg-pink-900/50 hover:border-pink-500' 
+                                  : 'bg-blue-900/30 border-blue-700/50 hover:bg-blue-900/50 hover:border-blue-500'
+                              }`}
                           >
-                              <div className="w-12 h-12 rounded-full bg-pink-600/20 flex items-center justify-center text-pink-400 group-hover:scale-110 transition">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+                              <div className={`w-12 h-12 rounded-full flex items-center justify-center transition group-hover:scale-110 ${
+                                  storyMode === 'romance' ? 'bg-pink-600/20 text-pink-400' : 'bg-blue-600/20 text-blue-400'
+                              }`}>
+                                {storyMode === 'romance' ? (
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+                                ) : (
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+                                )}
                               </div>
-                              <div className="font-bold text-pink-200">Chấm điểm Ngôn Tình</div>
-                              <div className="text-xs text-pink-300/60">Tiêu chí: Hook, Chemistry, Cẩu huyết, Sảng văn...</div>
-                          </button>
-
-                          <button 
-                              onClick={() => handleEvaluateStory('general')}
-                              className="p-6 rounded-xl bg-blue-900/30 border border-blue-700/50 hover:bg-blue-900/50 hover:border-blue-500 transition group flex flex-col items-center gap-3"
-                          >
-                               <div className="w-12 h-12 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-400 group-hover:scale-110 transition">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+                              <div className={`font-bold ${storyMode === 'romance' ? 'text-pink-200' : 'text-blue-200'}`}>
+                                  {storyMode === 'romance' ? 'Bắt đầu chấm điểm Ngôn Tình' : 'Bắt đầu chấm điểm Kịch bản'}
                               </div>
-                              <div className="font-bold text-blue-200">Chấm điểm Kịch bản</div>
-                              <div className="text-xs text-blue-300/60">Tiêu chí: Cấu trúc, Logic, Giọng văn, Ý tưởng...</div>
+                              <div className={`text-xs ${storyMode === 'romance' ? 'text-pink-300/60' : 'text-blue-300/60'}`}>
+                                  {storyMode === 'romance' ? 'Tiêu chí: Hook, Chemistry, Cẩu huyết, Sảng văn...' : 'Tiêu chí: Cấu trúc, Logic, Giọng văn, Ý tưởng...'}
+                              </div>
                           </button>
                       </div>
                   )}

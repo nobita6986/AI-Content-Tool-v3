@@ -1,5 +1,6 @@
 
 export type Language = 'vi' | 'en';
+export type StoryMode = 'romance' | 'non-romance';
 
 export interface OutlineItem {
   index: number;
@@ -9,9 +10,15 @@ export interface OutlineItem {
 }
 
 export interface StoryMetadata {
-  femaleLead: string;
-  maleLead: string;
-  villain: string;
+  // Dynamic keys based on mode
+  char1: string; // Romance: Female Lead, Non-Romance: Protagonist
+  char2: string; // Romance: Male Lead, Non-Romance: Sidekick/Ally
+  char3: string; // Romance: Villain, Non-Romance: Antagonist
+  
+  // Display labels for UI
+  label1?: string; 
+  label2?: string;
+  label3?: string;
 }
 
 export interface StoryBlock {
@@ -48,18 +55,23 @@ export interface SavedSession {
   lastModified: number;
   bookTitle: string;
   language: Language;
+  
+  // New Configs
+  storyMode: StoryMode;
+  genre: string;
+
   bookIdea: string;
   bookImage: string | null;
   durationMin: number;
   isAutoDuration?: boolean;
   chaptersCount: number;
   frameRatio: string;
-  storyMetadata?: StoryMetadata; // New field to store consistent names
+  storyMetadata?: StoryMetadata; 
   outline: OutlineItem[];
   storyBlocks: StoryBlock[];
   scriptBlocks: ScriptBlock[];
   seo: SEOResult | null;
   videoPrompts: string[];
   thumbTextIdeas: string[];
-  evaluationResult?: string | null; // Store evaluation result
+  evaluationResult?: string | null;
 }

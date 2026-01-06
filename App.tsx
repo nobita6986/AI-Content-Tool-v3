@@ -1,3 +1,4 @@
+
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { OutlineItem, ScriptBlock, StoryBlock, SEOResult, LoadingStates, Language, SavedSession, StoryMetadata } from './types';
 import * as geminiService from './services/geminiService';
@@ -5,42 +6,54 @@ import { Card, Empty, LoadingOverlay, Modal, Toast, Tooltip } from './components
 
 // --- CONFIGURATION & THEMES ---
 
-const THEMES = {
-  vi: {
-    bg: "bg-[radial-gradient(1200px_700px_at_50%_0%,#0b1a22_0%,#07141b_45%,#031017_85%)]",
-    textMain: "text-sky-50",
-    textAccent: "text-sky-300",
-    textHighlight: "text-sky-100",
-    border: "border-sky-900",
-    borderLight: "border-sky-800",
-    bgCard: "bg-slate-900",
-    bgButton: "bg-sky-900/40",
-    bgButtonHover: "hover:bg-sky-900/60",
-    ring: "ring-sky-500",
-    gradientTitle: "from-sky-400 to-blue-500",
-    iconColor: "text-sky-300",
-    buttonPrimary: "bg-sky-700/50 hover:bg-sky-600/50",
-    subtleBg: "bg-sky-900/20",
-    badge: "bg-sky-600 shadow-[0_0_10px_rgba(2,132,199,0.5)]"
+type ThemeColor = 'sky' | 'rose' | 'violet' | 'amber' | 'emerald' | 'cyan';
+
+const THEME_PRESETS: Record<ThemeColor, { name: string; labelEn: string; hex: string; bgGradient: string }> = {
+  sky: { 
+    name: 'Xanh Dương', labelEn: 'Blue', hex: '#0ea5e9', 
+    bgGradient: "bg-[radial-gradient(1200px_700px_at_50%_0%,#082f49_0%,#020617_60%,#000000_100%)]" 
   },
-  en: {
-    // English theme: Emerald / Teal / Slate
-    bg: "bg-[radial-gradient(1200px_700px_at_50%_0%,#022c22_0%,#064e3b_45%,#020617_85%)]",
-    textMain: "text-emerald-50",
-    textAccent: "text-emerald-300",
-    textHighlight: "text-emerald-100",
-    border: "border-emerald-900",
-    borderLight: "border-emerald-800",
-    bgCard: "bg-slate-950",
-    bgButton: "bg-emerald-900/40",
-    bgButtonHover: "hover:bg-emerald-900/60",
-    ring: "ring-emerald-500",
-    gradientTitle: "from-emerald-400 to-teal-500",
-    iconColor: "text-emerald-300",
-    buttonPrimary: "bg-emerald-700/50 hover:bg-emerald-600/50",
-    subtleBg: "bg-emerald-900/20",
-    badge: "bg-emerald-600 shadow-[0_0_10px_rgba(5,150,105,0.5)]"
-  }
+  emerald: { 
+    name: 'Xanh Lá', labelEn: 'Green', hex: '#10b981', 
+    bgGradient: "bg-[radial-gradient(1200px_700px_at_50%_0%,#022c22_0%,#020617_60%,#000000_100%)]" 
+  },
+  rose: { 
+    name: 'Đỏ', labelEn: 'Red', hex: '#f43f5e', 
+    bgGradient: "bg-[radial-gradient(1200px_700px_at_50%_0%,#4c0519_0%,#020617_60%,#000000_100%)]" 
+  },
+  violet: { 
+    name: 'Tím', labelEn: 'Purple', hex: '#8b5cf6', 
+    bgGradient: "bg-[radial-gradient(1200px_700px_at_50%_0%,#2e1065_0%,#020617_60%,#000000_100%)]" 
+  },
+  amber: { 
+    name: 'Vàng', labelEn: 'Gold', hex: '#f59e0b', 
+    bgGradient: "bg-[radial-gradient(1200px_700px_at_50%_0%,#451a03_0%,#020617_60%,#000000_100%)]" 
+  },
+  cyan: { 
+    name: 'Lam', labelEn: 'Cyan', hex: '#06b6d4', 
+    bgGradient: "bg-[radial-gradient(1200px_700px_at_50%_0%,#164e63_0%,#020617_60%,#000000_100%)]" 
+  },
+};
+
+const getThemeStyles = (color: ThemeColor) => {
+  const preset = THEME_PRESETS[color];
+  return {
+    bg: preset.bgGradient,
+    textMain: `text-${color}-50`,
+    textAccent: `text-${color}-300`,
+    textHighlight: `text-${color}-100`,
+    border: `border-${color}-900`,
+    borderLight: `border-${color}-800`,
+    bgCard: "bg-slate-950", // Keep cards dark for contrast
+    bgButton: `bg-${color}-900/40`,
+    bgButtonHover: `hover:bg-${color}-900/60`,
+    ring: `ring-${color}-500`,
+    gradientTitle: `from-${color}-400 to-${color === 'sky' ? 'blue' : color === 'rose' ? 'red' : color === 'emerald' ? 'teal' : color === 'violet' ? 'purple' : color === 'amber' ? 'yellow' : 'cyan'}-500`,
+    iconColor: `text-${color}-300`,
+    buttonPrimary: `bg-${color}-700/50 hover:bg-${color}-600/50`,
+    subtleBg: `bg-${color}-900/20`,
+    badge: `bg-${color}-600 shadow-[0_0_10px_rgba(var(--color-${color}-500),0.5)]`
+  };
 };
 
 const INITIAL_LOADING_STATES: LoadingStates = {
@@ -53,6 +66,7 @@ const INITIAL_LOADING_STATES: LoadingStates = {
 
 export default function App() {
   const [language, setLanguage] = useState<Language>('vi'); 
+  const [themeColor, setThemeColor] = useState<ThemeColor>('sky');
   
   // -- Content State --
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -83,6 +97,7 @@ export default function App() {
   // -- Modals --
   const [isApiModalOpen, setIsApiModalOpen] = useState(false);
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
+  const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
   const [activeGuideTab, setActiveGuideTab] = useState<'strengths' | 'guide'>('strengths');
   const [isExtraConfigModalOpen, setIsExtraConfigModalOpen] = useState(false);
   const [isLibraryModalOpen, setIsLibraryModalOpen] = useState(false);
@@ -123,7 +138,7 @@ export default function App() {
   // Check if ANY AI task is currently running to disable other buttons
   const isGlobalLoading = Object.values(loading).some(Boolean) || isRewriting;
 
-  const theme = THEMES[language];
+  const theme = useMemo(() => getThemeStyles(themeColor), [themeColor]);
   
   // Display target chars: If Auto, show range. Else calc based on Duration (1000 chars/min)
   const totalCharsTargetStr = useMemo(() => {
@@ -142,6 +157,12 @@ export default function App() {
     const storedOpenAIKey = localStorage.getItem("nd_openai_api_key");
     if (storedGeminiKey) setApiKeyGemini(storedGeminiKey);
     if (storedOpenAIKey) setApiKeyOpenAI(storedOpenAIKey);
+    
+    // Theme
+    const storedTheme = localStorage.getItem("nd_theme_color");
+    if (storedTheme && THEME_PRESETS[storedTheme as ThemeColor]) {
+      setThemeColor(storedTheme as ThemeColor);
+    }
 
     // Configs (VI)
     const storedChannelVi = localStorage.getItem("nd_channel_name_vi");
@@ -183,6 +204,12 @@ export default function App() {
     localStorage.setItem("nd_channel_name_en", channelNameEn);
     localStorage.setItem("nd_mc_name_en", mcNameEn);
     setIsExtraConfigModalOpen(false);
+  };
+  
+  const handleSelectTheme = (color: ThemeColor) => {
+    setThemeColor(color);
+    localStorage.setItem("nd_theme_color", color);
+    setIsThemeModalOpen(false);
   };
 
   // --- SESSION & AUTO-SAVE LOGIC ---
@@ -628,6 +655,15 @@ export default function App() {
                     {language === 'vi' ? 'VN' : 'US'}
                   </div>
               </button>
+              
+               {/* Theme Button */}
+               <button 
+                onClick={() => setIsThemeModalOpen(true)}
+                className={`flex items-center justify-center w-10 h-10 rounded-full ${theme.bgCard}/80 border ${theme.borderLight} ${theme.textAccent} text-sm font-medium hover:${theme.bgButton} hover:text-white transition shadow-lg`}
+                title="Đổi giao diện / Change Theme"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
+              </button>
 
               {/* Library Button */}
               <button 
@@ -798,6 +834,9 @@ export default function App() {
 
           <Card title="4) Nội dung Truyện" actions={
             <div className="flex gap-2">
+               {storyBlocks.length === 0 && (
+                  <ThemedButton onClick={handleGenerateStory} disabled={isGlobalLoading || isStoryUploaded} className="text-xs px-2 py-1 h-8">Viết Truyện</ThemedButton>
+               )}
                <ThemedButton 
                   onClick={openRewriteAllModal} 
                   disabled={isGlobalLoading || storyBlocks.length === 0} 
@@ -812,7 +851,6 @@ export default function App() {
                    </span>
                  ) : "Sửa / Viết lại"}
                </ThemedButton>
-               <ThemedButton onClick={handleGenerateStory} disabled={isGlobalLoading || isStoryUploaded} className="text-xs px-2 py-1 h-8">Viết Truyện</ThemedButton>
                <ThemedButton onClick={exportStoryCSV} disabled={storyBlocks.length === 0} className="text-xs px-2 py-1 h-8">Tải CSV</ThemedButton>
                <ThemedButton onClick={exportStoryTXT} disabled={storyBlocks.length === 0} className="text-xs px-2 py-1 h-8">Tải TXT</ThemedButton>
             </div>
@@ -851,3 +889,253 @@ export default function App() {
                 )}
             </div>
           </Card>
+
+          <Card title="5) Review Script (Kịch bản Audio)" actions={
+              <ThemedButton onClick={exportScriptCSV} disabled={scriptBlocks.length === 0} className="text-xs px-2 py-1 h-8">Tải CSV</ThemedButton>
+          }>
+            <div className="relative">
+                {loading.script && <LoadingOverlay />}
+                {scriptBlocks.length === 0 ? <Empty text="Chưa có kịch bản review." /> : (
+                   <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+                     {scriptBlocks.map((b) => (
+                       <div key={b.index} className={`p-3 rounded-xl ${theme.bgCard}/50 border ${theme.border}`}>
+                         <div className="font-semibold text-sky-200 mb-1">{b.chapter} <span className="text-xs opacity-50 font-normal">({b.chars} chars)</span></div>
+                         <p className="whitespace-pre-wrap leading-relaxed opacity-90 text-sm">{b.text}</p>
+                       </div>
+                     ))}
+                   </div>
+                )}
+            </div>
+          </Card>
+
+          <Card title="6) SEO Metadata">
+            <div className="relative">
+              {loading.seo && <LoadingOverlay />}
+              {!seo ? <Empty text="Chưa có thông tin SEO." /> : (
+                <div className="space-y-4 text-sm">
+                  <div>
+                     <div className="font-semibold text-sky-200 mb-1">Tiêu đề đề xuất:</div>
+                     <ul className="list-disc ml-5 space-y-1 opacity-90">{seo.titles.map((t,i)=><li key={i}>{t}</li>)}</ul>
+                  </div>
+                  <div>
+                     <div className="font-semibold text-sky-200 mb-1">Mô tả video:</div>
+                     <p className="whitespace-pre-wrap opacity-90 p-2 rounded bg-black/20">{seo.description}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                     <div>
+                       <div className="font-semibold text-sky-200 mb-1">Hashtags:</div>
+                       <div className="opacity-90">{seo.hashtags.join(", ")}</div>
+                     </div>
+                     <div>
+                       <div className="font-semibold text-sky-200 mb-1">Keywords:</div>
+                       <div className="opacity-90">{seo.keywords.join(", ")}</div>
+                     </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </Card>
+
+          <Card title="7) Prompts & Thumbnails" actions={
+              <ThemedButton onClick={exportPromptCSV} disabled={videoPrompts.length === 0} className="text-xs px-2 py-1 h-8">Tải CSV</ThemedButton>
+          }>
+             <div className="relative">
+                 {loading.prompts && <LoadingOverlay />}
+                 {videoPrompts.length === 0 ? <Empty text="Chưa có prompt video/thumbnail." /> : (
+                   <div className="space-y-4 text-sm max-h-[400px] overflow-y-auto pr-2">
+                     <div>
+                        <div className="font-semibold text-sky-200 mb-2 sticky top-0 bg-slate-900/90 py-1">Video Prompts (Midjourney/Leonardo):</div>
+                        <ul className="space-y-2">
+                          {videoPrompts.map((p,i) => (
+                            <li key={i} className={`p-2 rounded border ${theme.border} ${theme.bgCard}/30`}>
+                               <span className="font-bold text-sky-500 mr-2">#{i+1}</span>{p}
+                            </li>
+                          ))}
+                        </ul>
+                     </div>
+                     <div>
+                        <div className="font-semibold text-sky-200 mb-2 sticky top-0 bg-slate-900/90 py-1">Thumbnail Text Ideas:</div>
+                        <ul className="list-disc ml-5 space-y-1 opacity-90">
+                          {thumbTextIdeas.map((t,i) => <li key={i}>{t}</li>)}
+                        </ul>
+                     </div>
+                   </div>
+                 )}
+             </div>
+          </Card>
+        </section>
+      </main>
+
+      <Modal isOpen={isApiModalOpen} onClose={() => setIsApiModalOpen(false)} title="API Configuration">
+        <div className="space-y-4">
+            <div className={`p-3 rounded-lg border ${theme.borderLight} bg-blue-900/10 text-sm`}>
+                <p className="font-medium text-blue-200 mb-1">Hướng dẫn lấy API Key:</p>
+                <ul className="list-disc ml-4 space-y-1 text-slate-300">
+                    <li><b>Google Gemini:</b> Truy cập <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-blue-400 hover:underline">Google AI Studio</a>.</li>
+                    <li><b>OpenAI (Optional):</b> Truy cập <a href="https://platform.openai.com/api-keys" target="_blank" className="text-blue-400 hover:underline">OpenAI Platform</a>.</li>
+                </ul>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Google Gemini API Key (Required)</label>
+              <input type="password" value={apiKeyGemini} onChange={(e) => setApiKeyGemini(e.target.value)} className={`w-full rounded border ${theme.border} bg-slate-950 px-3 py-2 text-white focus:ring-2 ${theme.ring}`} placeholder="AIza..." />
+            </div>
+             <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">OpenAI API Key (Optional)</label>
+              <input type="password" value={apiKeyOpenAI} onChange={(e) => setApiKeyOpenAI(e.target.value)} className={`w-full rounded border ${theme.border} bg-slate-950 px-3 py-2 text-white focus:ring-2 ${theme.ring}`} placeholder="sk-..." />
+            </div>
+            
+            <div className="pt-2 flex justify-end">
+                <ThemedButton onClick={handleSaveKeys} className={`${theme.buttonPrimary} text-white`}>Lưu API Key</ThemedButton>
+            </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={isGuideModalOpen} onClose={() => setIsGuideModalOpen(false)} title="Hướng dẫn & Mẹo">
+        <div className="flex gap-4 border-b border-gray-700 mb-4">
+           <button onClick={() => setActiveGuideTab('strengths')} className={`pb-2 px-1 text-sm font-medium transition-colors ${activeGuideTab === 'strengths' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-400 hover:text-slate-200'}`}>Điểm mạnh Tool</button>
+           <button onClick={() => setActiveGuideTab('guide')} className={`pb-2 px-1 text-sm font-medium transition-colors ${activeGuideTab === 'guide' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-400 hover:text-slate-200'}`}>Quy trình chuẩn</button>
+        </div>
+        
+        {activeGuideTab === 'strengths' ? (
+             <div className="space-y-4 text-sm text-slate-300">
+               <p>Tool này được thiết kế tối ưu cho việc làm content YouTube số lượng lớn (Industrial Scale) nhưng vẫn giữ chất lượng cao:</p>
+               <ul className="list-disc ml-5 space-y-2">
+                   <li><b>Consistency (Nhất quán):</b> Metadata nhân vật (Tên, Tính cách) được lưu và truyền xuyên suốt qua các prompt. Không bị tình trạng chap 1 tên A, chap 2 tên B.</li>
+                   <li><b>Deep Content:</b> Thay vì viết một lèo, tool chia nhỏ outline và viết từng chương chi tiết (500-700 từ/chương), đảm bảo độ sâu tâm lý.</li>
+                   <li><b>Review Automation:</b> Tự động đóng vai MC để viết lời dẫn cho Audio, tiết kiệm 50% thời gian biên tập.</li>
+                   <li><b>SEO & Visual:</b> Tự động sinh Prompt ảnh/video phù hợp với bối cảnh truyện, sẵn sàng cho khâu edit.</li>
+               </ul>
+            </div>
+        ) : (
+             <div className="space-y-4 text-sm text-slate-300">
+                <ol className="list-decimal ml-5 space-y-3">
+                   <li><b>Cài đặt:</b> Nhập API Key. Cấu hình Tên Kênh/MC để lời dẫn tự nhiên hơn.</li>
+                   <li><b>Lên ý tưởng:</b> Nhập tên sách/chủ đề. Nhấn "Tạo Sườn". AI sẽ đề xuất dàn ý + nhân vật.</li>
+                   <li><b>Viết truyện:</b> Nhấn "Viết Truyện". AI sẽ viết lần lượt từng chương dựa trên sườn đã duyệt.</li>
+                   <li><b>Kiểm tra & Sửa:</b> Đọc lướt nội dung. Nếu đoạn nào chưa hay, nhấn "Sửa" ngay tại block đó để AI viết lại.</li>
+                   <li><b>Xuất bản:</b> Tải CSV/TXT. Dùng file này để đưa vào phần mềm chuyển văn bản thành giọng nói (TTS).</li>
+                </ol>
+             </div>
+        )}
+      </Modal>
+
+      <Modal isOpen={isExtraConfigModalOpen} onClose={() => setIsExtraConfigModalOpen(false)} title="Cấu hình nâng cao">
+         <div className="space-y-6">
+            <div className="p-3 rounded bg-slate-950/50 border border-slate-800">
+               <h4 className="text-sm font-semibold text-blue-300 mb-3 border-b border-slate-800 pb-1">Cấu hình cho Tiếng Việt (VN Mode)</h4>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 mb-1">Tên Kênh YouTube</label>
+                    <input type="text" value={channelNameVi} onChange={(e) => setChannelNameVi(e.target.value)} className={`w-full rounded border ${theme.border} bg-slate-900 px-3 py-2 text-sm focus:ring-1 ${theme.ring}`} placeholder="VD: Gấu Kể Chuyện" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 mb-1">Tên MC / Người dẫn</label>
+                    <input type="text" value={mcNameVi} onChange={(e) => setMcNameVi(e.target.value)} className={`w-full rounded border ${theme.border} bg-slate-900 px-3 py-2 text-sm focus:ring-1 ${theme.ring}`} placeholder="VD: Admin" />
+                  </div>
+               </div>
+            </div>
+
+             <div className="p-3 rounded bg-slate-950/50 border border-slate-800">
+               <h4 className="text-sm font-semibold text-emerald-300 mb-3 border-b border-slate-800 pb-1">Configuration for English (US Mode)</h4>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 mb-1">Channel Name</label>
+                    <input type="text" value={channelNameEn} onChange={(e) => setChannelNameEn(e.target.value)} className={`w-full rounded border ${theme.border} bg-slate-900 px-3 py-2 text-sm focus:ring-1 ${theme.ring}`} placeholder="Ex: Daily Tales" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 mb-1">Host Name</label>
+                    <input type="text" value={mcNameEn} onChange={(e) => setMcNameEn(e.target.value)} className={`w-full rounded border ${theme.border} bg-slate-900 px-3 py-2 text-sm focus:ring-1 ${theme.ring}`} placeholder="Ex: John" />
+                  </div>
+               </div>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+                <ThemedButton onClick={handleSaveExtraConfig} className={`${theme.buttonPrimary} text-white`}>Lưu Cấu Hình</ThemedButton>
+            </div>
+         </div>
+      </Modal>
+
+      <Modal isOpen={isLibraryModalOpen} onClose={() => setIsLibraryModalOpen(false)} title="Thư viện phiên làm việc">
+         {sessions.length === 0 ? (
+             <div className="text-center py-8 text-slate-500">Chưa có phiên làm việc nào được lưu.</div>
+         ) : (
+             <div className="space-y-3">
+                 {sessions.map(s => (
+                     <div key={s.id} onClick={() => handleLoadSession(s)} className={`p-3 rounded-lg border ${theme.borderLight} bg-slate-900/50 hover:bg-slate-800 cursor-pointer transition flex justify-between items-center group`}>
+                         <div>
+                             <div className="font-medium text-sky-100">{s.bookTitle || "Không tên"}</div>
+                             <div className="text-xs text-slate-500 mt-1 flex gap-2">
+                                 <span>{new Date(s.lastModified).toLocaleDateString()} {new Date(s.lastModified).toLocaleTimeString()}</span>
+                                 <span>• {s.chaptersCount} chương</span>
+                                 <span>• {s.language.toUpperCase()}</span>
+                             </div>
+                         </div>
+                         <button onClick={(e) => handleDeleteSession(s.id, e)} className="p-2 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                         </button>
+                     </div>
+                 ))}
+             </div>
+         )}
+      </Modal>
+
+      <Modal isOpen={isRewriteModalOpen} onClose={() => setIsRewriteModalOpen(false)} title="Sửa nội dung">
+         <div className="space-y-4">
+             <div className="text-sm text-slate-300 bg-slate-950 p-3 rounded border border-slate-800">
+                {rewriteScope === 'single' ? (
+                   <span>Bạn đang sửa đoạn: <b>{editingBlockIndex !== null ? storyBlocks[editingBlockIndex]?.title : ""}</b></span>
+                ) : (
+                   <span className="text-amber-300">Bạn đang sửa TOÀN BỘ truyện cùng lúc. Hãy nhập chỉ dẫn chung (ví dụ: "Đổi giọng văn sang hài hước hơn", "Thêm thoại cho nhân vật nam").</span>
+                )}
+             </div>
+             
+             <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Yêu cầu sửa đổi (Feedback):</label>
+                <textarea 
+                    value={rewriteFeedback} 
+                    onChange={(e) => setRewriteFeedback(e.target.value)} 
+                    placeholder="VD: Viết lại đoạn này kịch tính hơn. Thêm miêu tả nội tâm nhân vật..." 
+                    className={`w-full h-32 rounded border ${theme.border} bg-slate-950 px-3 py-2 text-white focus:ring-2 ${theme.ring}`} 
+                />
+             </div>
+             <div className="flex justify-end gap-2 pt-2">
+                 <button onClick={() => setIsRewriteModalOpen(false)} className="px-4 py-2 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition">Hủy</button>
+                 <ThemedButton onClick={handleRewriteSubmit} className={`${theme.buttonPrimary} text-white`}>
+                    {rewriteScope === 'single' ? 'Sửa đoạn này' : 'Sửa toàn bộ'}
+                 </ThemedButton>
+             </div>
+         </div>
+      </Modal>
+
+      <Modal isOpen={isThemeModalOpen} onClose={() => setIsThemeModalOpen(false)} title="Chọn giao diện (Select Theme)">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+           {(Object.keys(THEME_PRESETS) as ThemeColor[]).map((color) => {
+             const preset = THEME_PRESETS[color];
+             const isSelected = themeColor === color;
+             return (
+               <button 
+                  key={color}
+                  onClick={() => handleSelectTheme(color)}
+                  className={`relative p-4 rounded-xl border-2 transition-all hover:scale-105 flex flex-col items-center gap-2 group ${isSelected ? `border-${color}-400 bg-slate-800` : `border-slate-800 bg-slate-900 hover:border-${color}-700`}`}
+               >
+                  <div className={`w-12 h-12 rounded-full shadow-lg ${preset.bgGradient} border border-white/10`}></div>
+                  <div className="text-center">
+                    <div className={`font-semibold text-sm ${isSelected ? `text-${color}-300` : 'text-slate-300 group-hover:text-white'}`}>{preset.name}</div>
+                    <div className="text-xs text-slate-500">{preset.labelEn}</div>
+                  </div>
+                  {isSelected && (
+                    <div className={`absolute top-2 right-2 w-5 h-5 bg-${color}-500 rounded-full flex items-center justify-center text-black`}>
+                       <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    </div>
+                  )}
+               </button>
+             );
+           })}
+        </div>
+      </Modal>
+
+      {toastMessage && <Toast message={toastMessage} onClose={() => setToastMessage(null)} />}
+    </div>
+  );
+}

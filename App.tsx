@@ -329,11 +329,13 @@ export default function App() {
   }, [bookTitle, bookIdea, bookImage, durationMin, isAutoDuration, calculatedChapters, frameRatio, outline, storyMetadata, storyBlocks, scriptBlocks, seo, videoPrompts, thumbTextIdeas, language, sessionId, evaluationResult]);
 
   // HELPER: Force update session immediately (skip debounce)
-  // Useful for real-time saving during batch processes like Rewrite
-  const updateCurrentSessionImmediate = (newStoryBlocks: StoryBlock[]) => {
+  // Useful for real-time saving during batch processes like Rewrite/Evaluation
+  const saveSessionImmediate = (overrides?: Partial<SavedSession>) => {
       const currentId = sessionId || crypto.randomUUID();
       if (!sessionId) setSessionId(currentId);
 
+      // Construct session with current state, merging overrides
+      // Note: We use the variables from the component scope (closures)
       const newSession: SavedSession = {
           id: currentId,
           lastModified: Date.now(),
@@ -347,12 +349,13 @@ export default function App() {
           frameRatio,
           storyMetadata,
           outline,
-          storyBlocks: newStoryBlocks,
+          storyBlocks,
           scriptBlocks,
           seo,
           videoPrompts,
           thumbTextIdeas,
           evaluationResult,
+          ...overrides
       };
 
       setSessions(prev => {
@@ -579,6 +582,9 @@ export default function App() {
       const fullText = storyBlocks.map(b => `### ${b.title}\n${b.content}`).join("\n\n");
       const result = await geminiService.evaluateStory(fullText, mode, bookTitle, selectedModel, apiKeyGemini);
       setEvaluationResult(result);
+      // Force save immediately to ensure evaluation result is persisted
+      saveSessionImmediate({ evaluationResult: result });
+      setToastMessage("Đã hoàn tất đánh giá và lưu vào thư viện.");
   }, 'evaluation');
 
   // --- REWRITE LOGIC ---
@@ -646,6 +652,7 @@ export default function App() {
     
     setIsRewriteModalOpen(false); // Close modal immediately
     setIsRewriting(true);
+    setToastMessage("Đang tiến hành viết lại nội dung..."); // Notify user
     setError(null);
 
     try {
@@ -665,7 +672,7 @@ export default function App() {
                 updated[editingBlockIndex] = { ...updated[editingBlockIndex], content: newContent };
                 
                 // Call immediate save here to ensure library is updated
-                updateCurrentSessionImmediate(updated);
+                saveSessionImmediate({ storyBlocks: updated });
                 
                 return updated;
             });
@@ -700,7 +707,7 @@ export default function App() {
                     setStoryBlocks([...runningBlocks]);
                     
                     // IMMEDIATE SESSION UPDATE
-                    updateCurrentSessionImmediate(runningBlocks);
+                    saveSessionImmediate({ storyBlocks: runningBlocks });
 
                     // Update indices set to highlight UI immediately
                     setRewrittenIndices(prev => new Set(prev).add(i));
@@ -1273,6 +1280,7 @@ export default function App() {
                                  <span>{new Date(s.lastModified).toLocaleDateString()} {new Date(s.lastModified).toLocaleTimeString()}</span>
                                  <span>• {s.chaptersCount} chương</span>
                                  <span>• {s.language.toUpperCase()}</span>
+                                 {s.evaluationResult && <span className="text-purple-400">• Đã chấm điểm</span>}
                              </div>
                          </div>
                          <button onClick={(e) => handleDeleteSession(s.id, e)} className="p-2 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition">

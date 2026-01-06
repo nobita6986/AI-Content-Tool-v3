@@ -782,7 +782,15 @@ export default function App() {
 
           <Card title="4) Nội dung Truyện" actions={
             <div className="flex gap-2">
-               <ThemedButton onClick={openRewriteAllModal} disabled={isGlobalLoading || storyBlocks.length === 0} className="text-xs px-2 py-1 h-8 bg-sky-700/40 border-sky-600/50 hover:bg-sky-600/60">Sửa / Viết lại</ThemedButton>
+               <ThemedButton 
+                  onClick={openRewriteAllModal} 
+                  disabled={isGlobalLoading || storyBlocks.length === 0} 
+                  className="text-xs px-2 py-1 h-8 bg-sky-700/40 border-sky-600/50 hover:bg-sky-600/60 min-w-[100px]"
+               >
+                 {isRewriting && rewriteScope === 'all' && rewriteProgress 
+                    ? `Đang sửa ${rewriteProgress.current}/${rewriteProgress.total}` 
+                    : (isRewriting ? "Đang xử lý..." : "Sửa / Viết lại")}
+               </ThemedButton>
                <ThemedButton onClick={handleGenerateStory} disabled={isGlobalLoading || isStoryUploaded} className="text-xs px-2 py-1 h-8">Viết Truyện</ThemedButton>
                <ThemedButton onClick={exportStoryCSV} disabled={storyBlocks.length === 0} className="text-xs px-2 py-1 h-8">Tải CSV</ThemedButton>
             </div>
@@ -1009,7 +1017,7 @@ export default function App() {
                     {isRewriting ? (
                         <>
                             <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                            {rewriteScope === 'all' ? "Đang viết lại toàn bộ..." : "Đang viết lại..."}
+                            {rewriteScope === 'all' && rewriteProgress ? `Đang sửa phần ${rewriteProgress.current}/${rewriteProgress.total}` : "Đang viết lại..."}
                         </>
                     ) : (rewriteScope === 'all' ? "Viết lại toàn bộ truyện" : "Viết lại chương này")}
                 </button>

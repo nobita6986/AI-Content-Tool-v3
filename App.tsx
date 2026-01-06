@@ -118,6 +118,10 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [sessions, setSessions] = useState<SavedSession[]>([]);
 
+  // --- DERIVED STATE ---
+  // Check if ANY AI task is currently running to disable other buttons
+  const isGlobalLoading = Object.values(loading).some(Boolean) || isRewriting;
+
   const theme = THEMES[language];
   
   // Display target chars: If Auto, show range. Else calc based on Duration (1000 chars/min)
@@ -678,11 +682,11 @@ export default function App() {
           
           <Card title="2) Tạo Nội Dung">
             <div className="flex flex-col space-y-2">
-              <ThemedButton onClick={handleGenerateOutline} disabled={loading.outline || isStoryUploaded}>Phân tích & Tạo sườn</ThemedButton>
-              <ThemedButton onClick={handleGenerateStory} disabled={loading.story || isStoryUploaded}>Viết Truyện (Theo sườn)</ThemedButton>
-              <ThemedButton onClick={handleGenerateReviewScript} disabled={loading.script}>Review Truyện (Kịch bản Audio)</ThemedButton>
-              <ThemedButton onClick={handleGenerateSEO} disabled={loading.seo}>Tạo Tiêu đề & Mô tả SEO</ThemedButton>
-              <ThemedButton onClick={handleGeneratePrompts} disabled={loading.prompts}>Tạo Prompt Video & Thumbnail</ThemedButton>
+              <ThemedButton onClick={handleGenerateOutline} disabled={isGlobalLoading || isStoryUploaded}>Phân tích & Tạo sườn</ThemedButton>
+              <ThemedButton onClick={handleGenerateStory} disabled={isGlobalLoading || isStoryUploaded}>Viết Truyện (Theo sườn)</ThemedButton>
+              <ThemedButton onClick={handleGenerateReviewScript} disabled={isGlobalLoading}>Review Truyện (Kịch bản Audio)</ThemedButton>
+              <ThemedButton onClick={handleGenerateSEO} disabled={isGlobalLoading}>Tạo Tiêu đề & Mô tả SEO</ThemedButton>
+              <ThemedButton onClick={handleGeneratePrompts} disabled={isGlobalLoading}>Tạo Prompt Video & Thumbnail</ThemedButton>
               {error && <p className="text-sm text-red-400 mt-2 bg-red-900/20 p-2 rounded">{error}</p>}
             </div>
           </Card>
@@ -690,7 +694,7 @@ export default function App() {
 
         <section className="lg:col-span-2 space-y-6">
           <Card title="3) Sườn kịch bản" actions={
-              <ThemedButton onClick={handleGenerateOutline} disabled={loading.outline || isStoryUploaded} className="text-xs px-2 py-1 h-8">Tạo sườn</ThemedButton>
+              <ThemedButton onClick={handleGenerateOutline} disabled={isGlobalLoading || isStoryUploaded} className="text-xs px-2 py-1 h-8">Tạo sườn</ThemedButton>
           }>
             <div className="relative">
              {loading.outline && <LoadingOverlay />}
@@ -722,8 +726,8 @@ export default function App() {
 
           <Card title="4) Nội dung Truyện" actions={
             <div className="flex gap-2">
-               <ThemedButton onClick={openRewriteAllModal} disabled={loading.story || storyBlocks.length === 0} className="text-xs px-2 py-1 h-8 bg-sky-700/40 border-sky-600/50 hover:bg-sky-600/60">Sửa / Viết lại</ThemedButton>
-               <ThemedButton onClick={handleGenerateStory} disabled={loading.story || isStoryUploaded} className="text-xs px-2 py-1 h-8">Viết Truyện</ThemedButton>
+               <ThemedButton onClick={openRewriteAllModal} disabled={isGlobalLoading || storyBlocks.length === 0} className="text-xs px-2 py-1 h-8 bg-sky-700/40 border-sky-600/50 hover:bg-sky-600/60">Sửa / Viết lại</ThemedButton>
+               <ThemedButton onClick={handleGenerateStory} disabled={isGlobalLoading || isStoryUploaded} className="text-xs px-2 py-1 h-8">Viết Truyện</ThemedButton>
                <ThemedButton onClick={exportStoryCSV} disabled={storyBlocks.length === 0} className="text-xs px-2 py-1 h-8">Tải CSV</ThemedButton>
             </div>
           }>
@@ -737,7 +741,8 @@ export default function App() {
                              <div className={`font-semibold ${theme.textHighlight}`}>{b.title}</div>
                              <button 
                                 onClick={() => openRewriteModal(index)}
-                                className={`text-xs px-2 py-1 rounded border ${theme.borderLight} ${theme.bgButton} hover:text-white transition flex items-center gap-1`}
+                                disabled={isGlobalLoading}
+                                className={`text-xs px-2 py-1 rounded border ${theme.borderLight} ${theme.bgButton} hover:text-white transition flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed`}
                                 title="Viết lại đoạn này"
                              >
                                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -754,7 +759,7 @@ export default function App() {
 
           <Card title="5) Review Truyện (Kịch bản Audio)" actions={
             <div className="flex gap-2">
-               <ThemedButton onClick={handleGenerateReviewScript} disabled={loading.script} className="text-xs px-2 py-1 h-8">Review Truyện</ThemedButton>
+               <ThemedButton onClick={handleGenerateReviewScript} disabled={isGlobalLoading} className="text-xs px-2 py-1 h-8">Review Truyện</ThemedButton>
                <ThemedButton onClick={exportScriptCSV} disabled={scriptBlocks.length === 0} className="text-xs px-2 py-1 h-8">Tải CSV</ThemedButton>
             </div>
           }>
@@ -778,7 +783,7 @@ export default function App() {
           </Card>
 
           <Card title="6) Gợi ý SEO" actions={
-             <ThemedButton onClick={handleGenerateSEO} disabled={loading.seo} className="text-xs px-2 py-1 h-8">Tạo SEO</ThemedButton>
+             <ThemedButton onClick={handleGenerateSEO} disabled={isGlobalLoading} className="text-xs px-2 py-1 h-8">Tạo SEO</ThemedButton>
           }>
             <div className="relative">
               {loading.seo && <LoadingOverlay />}
@@ -806,7 +811,7 @@ export default function App() {
                     {['9:16','16:9','1:1','4:5','21:9'].map(r=> <option key={r} value={r} className="bg-slate-900">{r}</option>)}
                   </select>
                 </span>
-                <ThemedButton onClick={handleGeneratePrompts} disabled={loading.prompts} className="text-xs px-2 py-1 h-8">Tạo Prompt</ThemedButton>
+                <ThemedButton onClick={handleGeneratePrompts} disabled={isGlobalLoading} className="text-xs px-2 py-1 h-8">Tạo Prompt</ThemedButton>
                 <ThemedButton onClick={exportPromptCSV} disabled={videoPrompts.length === 0} className="text-xs px-2 py-1 h-8">Tải CSV</ThemedButton>
               </div>
           }>

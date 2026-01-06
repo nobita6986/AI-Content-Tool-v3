@@ -600,8 +600,35 @@ export default function App() {
   const handleRewriteFromEvaluation = () => {
      if (!evaluationResult) return;
      
+     let cleanedResult = evaluationResult;
+     
+     // Attempt to filter out the conversational intro (e.g. "Hello...", "I have read...")
+     // Look for specific keywords or markdown headers that start the actual content
+     const markers = ["BẢNG ĐÁNH GIÁ", "TIÊU CHÍ", "## 1", "### 1"];
+     
+     // Find the earliest occurrence of a marker
+     let cutIndex = -1;
+     for (const marker of markers) {
+         const idx = cleanedResult.toUpperCase().indexOf(marker);
+         if (idx !== -1) {
+             // If we found a marker, use it
+             cutIndex = idx;
+             break;
+         }
+     }
+     
+     // Fallback: If no specific keyword, look for the first major markdown header
+     if (cutIndex === -1) {
+          const headerIdx = cleanedResult.indexOf("## ");
+          if (headerIdx !== -1) cutIndex = headerIdx;
+     }
+
+     if (cutIndex !== -1) {
+         cleanedResult = cleanedResult.substring(cutIndex);
+     }
+     
      // Pre-fill prompt with context
-     setRewriteFeedback(`Dựa trên kết quả đánh giá dưới đây, hãy viết lại toàn bộ truyện để khắc phục các điểm yếu:\n\n${evaluationResult}`);
+     setRewriteFeedback(`Dựa trên kết quả đánh giá dưới đây, hãy viết lại toàn bộ truyện để khắc phục các điểm yếu:\n\n${cleanedResult}`);
      
      setRewriteScope('all');
      setEditingBlockIndex(null);
@@ -617,6 +644,7 @@ export default function App() {
   const handleRewriteSubmit = async () => {
     if (!rewriteFeedback.trim()) return;
     
+    setIsRewriteModalOpen(false); // Close modal immediately
     setIsRewriting(true);
     setError(null);
 
@@ -1179,16 +1207,18 @@ export default function App() {
                    <li><b>Deep Content:</b> Thay vì viết một lèo, tool chia nhỏ outline và viết từng chương chi tiết (500-700 từ/chương), đảm bảo độ sâu tâm lý.</li>
                    <li><b>Review Automation:</b> Tự động đóng vai MC để viết lời dẫn cho Audio, tiết kiệm 50% thời gian biên tập.</li>
                    <li><b>SEO & Visual:</b> Tự động sinh Prompt ảnh/video phù hợp với bối cảnh truyện, sẵn sàng cho khâu edit.</li>
+                   <li><b>Thẩm định chất lượng:</b> Chế độ "Đánh giá" đóng vai biên tập viên khó tính, soi lỗi logic/văn phong và cho phép AI tự động viết lại theo nhận xét đó.</li>
+                   <li><b>Lưu trữ an toàn:</b> Hệ thống tự động lưu (Auto-save) vào Thư viện, không lo mất dữ liệu.</li>
                </ul>
             </div>
         ) : (
              <div className="space-y-4 text-sm text-slate-300">
                 <ol className="list-decimal ml-5 space-y-3">
                    <li><b>Cài đặt:</b> Nhập API Key. Cấu hình Tên Kênh/MC để lời dẫn tự nhiên hơn.</li>
-                   <li><b>Lên ý tưởng:</b> Nhập tên sách/chủ đề. Nhấn "Tạo Kịch bản khung". AI sẽ đề xuất dàn ý + nhân vật.</li>
+                   <li><b>Lên ý tưởng:</b> Nhập tên sách/chủ đề (có thể chọn chế độ Tự động tính thời lượng). Nhấn "Tạo Kịch bản khung". AI sẽ đề xuất dàn ý + nhân vật.</li>
                    <li><b>Viết truyện:</b> Nhấn "Viết Truyện". AI sẽ viết lần lượt từng chương dựa trên Kịch bản khung đã duyệt.</li>
-                   <li><b>Kiểm tra & Sửa:</b> Đọc lướt nội dung. Nếu đoạn nào chưa hay, nhấn "Sửa" ngay tại block đó để AI viết lại.</li>
-                   <li><b>Xuất bản:</b> Tải CSV/TXT. Dùng file này để đưa vào phần mềm chuyển văn bản thành giọng nói (TTS).</li>
+                   <li><b>Kiểm định & Tối ưu (Mới):</b> Dùng tính năng "Đánh giá" để chấm điểm. Sau đó nhấn "Viết lại theo đánh giá" để AI tự động sửa toàn bộ truyện.</li>
+                   <li><b>Thư viện & Xuất file:</b> Truyện được tự động lưu. Tải CSV/TXT để đưa vào phần mềm chuyển văn bản thành giọng nói (TTS).</li>
                 </ol>
              </div>
         )}

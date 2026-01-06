@@ -595,6 +595,19 @@ export default function App() {
     setRewriteFeedback("");
     setIsRewriteModalOpen(true);
   };
+  
+  // New function to transfer evaluation to rewrite logic
+  const handleRewriteFromEvaluation = () => {
+     if (!evaluationResult) return;
+     
+     // Pre-fill prompt with context
+     setRewriteFeedback(`Dựa trên kết quả đánh giá dưới đây, hãy viết lại toàn bộ truyện để khắc phục các điểm yếu:\n\n${evaluationResult}`);
+     
+     setRewriteScope('all');
+     setEditingBlockIndex(null);
+     setIsEvaluationModalOpen(false); // Close Evaluation Modal
+     setIsRewriteModalOpen(true); // Open Rewrite Modal
+  };
 
   const openEvaluationModal = () => {
       // Don't clear evaluationResult here, so user can see previous results
@@ -1318,6 +1331,9 @@ export default function App() {
                       >
                         Đánh giá lại
                       </button>
+                      <ThemedButton onClick={handleRewriteFromEvaluation} className={`${theme.buttonPrimary} text-white`}>
+                        Viết lại theo đánh giá
+                      </ThemedButton>
                       <ThemedButton onClick={() => downloadTXT(`danh_gia_${geminiService.slugify(bookTitle)}.txt`, evaluationResult)} className={`${theme.buttonPrimary} text-white`}>
                         Tải kết quả (.txt)
                       </ThemedButton>

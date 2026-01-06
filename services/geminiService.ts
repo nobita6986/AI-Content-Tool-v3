@@ -187,6 +187,49 @@ export const generateStoryBlock = async (item: OutlineItem, metadata: StoryMetad
     }, apiKey);
 };
 
+export const rewriteStoryBlock = async (originalContent: string, feedback: string, metadata: StoryMetadata | undefined, language: Language, model: string = 'gemini-3-flash-preview', apiKey?: string): Promise<string> => {
+    const isVi = language === 'vi';
+    const characterContext = metadata ? (isVi
+        ? `Giữ đúng tên nhân vật nếu có: Nữ chính (${metadata.femaleLead}), Nam chính (${metadata.maleLead}), Phản diện (${metadata.villain}).`
+        : `Maintain character names if present: Female Lead (${metadata.femaleLead}), Male Lead (${metadata.maleLead}), Villain (${metadata.villain}).`) : "";
+
+    const prompt = isVi
+        ? `Bạn là một biên tập viên tiểu thuyết xuất sắc. Nhiệm vụ: Viết lại đoạn văn dưới đây dựa trên yêu cầu sửa đổi của người dùng.
+           
+           VĂN BẢN GỐC:
+           "${originalContent}"
+
+           YÊU CẦU SỬA ĐỔI (FEEDBACK):
+           "${feedback}"
+
+           YÊU CẦU QUAN TRỌNG:
+           1. Thay đổi nội dung/văn phong theo đúng feedback.
+           2. Giữ nguyên bối cảnh và mạch truyện chính nếu feedback không yêu cầu thay đổi.
+           3. ${characterContext}
+           4. Chỉ trả về nội dung truyện đã viết lại (không có lời bình luận của AI).`
+        : `You are an expert novel editor. Task: Rewrite the text below based on user feedback.
+
+           ORIGINAL TEXT:
+           "${originalContent}"
+
+           USER FEEDBACK:
+           "${feedback}"
+
+           CRITICAL REQUIREMENTS:
+           1. Rewrite strictly based on the feedback.
+           2. Maintain flow and context unless asked to change.
+           3. ${characterContext}
+           4. Return ONLY the rewritten story text.`;
+
+    return executeGenAIRequest(async (ai) => {
+        const response = await ai.models.generateContent({
+            model: model.includes('gpt') ? 'gemini-3-flash-preview' : model,
+            contents: [{ parts: [{ text: prompt }] }],
+        });
+        return response.text;
+    }, apiKey);
+};
+
 export const generateReviewBlock = async (storyContent: string, chapterTitle: string, bookTitle: string, channelName: string, mcName: string, language: Language, model: string = 'gemini-3-flash-preview', apiKey?: string): Promise<string> => {
     const isVi = language === 'vi';
     const identityInfo = isVi 

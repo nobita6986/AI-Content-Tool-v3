@@ -87,6 +87,12 @@ export default function App() {
   const [activeGuideTab, setActiveGuideTab] = useState<'strengths' | 'guide'>('strengths');
   const [isExtraConfigModalOpen, setIsExtraConfigModalOpen] = useState(false);
   const [isLibraryModalOpen, setIsLibraryModalOpen] = useState(false);
+  
+  // -- Rewrite Modal State --
+  const [isRewriteModalOpen, setIsRewriteModalOpen] = useState(false);
+  const [editingBlockIndex, setEditingBlockIndex] = useState<number | null>(null);
+  const [rewriteFeedback, setRewriteFeedback] = useState("");
+  const [isRewriting, setIsRewriting] = useState(false);
 
   // -- API Keys --
   const [apiKeyGemini, setApiKeyGemini] = useState("");
@@ -396,6 +402,45 @@ export default function App() {
     setThumbTextIdeas(thumbs);
   }, 'prompts');
 
+  // --- REWRITE LOGIC ---
+  const openRewriteModal = (index: number) => {
+    setEditingBlockIndex(index);
+    setRewriteFeedback("");
+    setIsRewriteModalOpen(true);
+  };
+
+  const handleRewriteStoryBlock = async () => {
+    if (editingBlockIndex === null || !rewriteFeedback.trim()) return;
+    
+    setIsRewriting(true);
+    try {
+        const originalBlock = storyBlocks[editingBlockIndex];
+        const newContent = await geminiService.rewriteStoryBlock(
+            originalBlock.content,
+            rewriteFeedback,
+            storyMetadata,
+            language,
+            selectedModel,
+            apiKeyGemini
+        );
+
+        setStoryBlocks(prev => {
+            const updated = [...prev];
+            updated[editingBlockIndex] = { ...updated[editingBlockIndex], content: newContent };
+            return updated;
+        });
+
+        setToastMessage("Đã viết lại đoạn truyện thành công!");
+        // Keep modal open so user can rewrite again if needed, or close it? 
+        // Better UX: Keep open but clear feedback or show success? Let's just finish loading.
+    } catch (err) {
+        console.error("Rewrite error", err);
+        setError(`Lỗi khi viết lại: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+        setIsRewriting(false);
+    }
+  };
+
   const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
   const fmtNumber = (n: number) => n.toLocaleString(language === 'vi' ? "vi-VN" : "en-US");
 
@@ -523,8 +568,8 @@ export default function App() {
               <div>
                 <div className="flex justify-between items-center mb-1">
                     <label className={`block text-sm font-medium ${theme.textAccent} flex items-center`}>
-                      Upload Truyện (để Review ngay)
-                      <Tooltip text="Nếu bạn đã có sẵn nội dung truyện (file .txt), hãy tải lên đây để AI tạo kịch bản Review ngay lập tức." />
+                      Upload Truyện (để Review hoặc Viết lại)
+                      <Tooltip text="Nếu bạn đã có sẵn nội dung truyện (file .txt), hãy tải lên đây. Bạn có thể dùng tính năng 'Sửa' để yêu cầu AI viết lại." />
                     </label>
                     <span className="text-[10px] opacity-70 italic">.txt</span>
                 </div>
@@ -644,9 +689,19 @@ export default function App() {
                 {loading.story && <LoadingOverlay />}
                 {storyBlocks.length === 0 ? <Empty text="Chưa có nội dung truyện. Nhấn 'Viết Truyện' hoặc Upload file." /> : (
                   <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
-                    {storyBlocks.map((b) => (
+                    {storyBlocks.map((b, index) => (
                       <div key={b.index} className={`p-3 rounded-xl ${theme.bgCard}/50 border ${theme.border}`}>
-                         <div className={`font-semibold ${theme.textHighlight} mb-2`}>{b.title}</div>
+                         <div className="flex justify-between items-start mb-2">
+                             <div className={`font-semibold ${theme.textHighlight}`}>{b.title}</div>
+                             <button 
+                                onClick={() => openRewriteModal(index)}
+                                className={`text-xs px-2 py-1 rounded border ${theme.borderLight} ${theme.bgButton} hover:text-white transition flex items-center gap-1`}
+                                title="Viết lại đoạn này"
+                             >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                Sửa / Viết lại
+                             </button>
+                         </div>
                          <p className="whitespace-pre-wrap leading-relaxed opacity-90 text-sm">{b.content}</p>
                       </div>
                     ))}
@@ -798,6 +853,58 @@ export default function App() {
         </div>
       </Modal>
 
+      {/* Rewrite Modal */}
+      <Modal
+        isOpen={isRewriteModalOpen}
+        onClose={() => setIsRewriteModalOpen(false)}
+        title="Phản hồi & Viết lại nội dung"
+      >
+         <div className="space-y-4">
+             {editingBlockIndex !== null && storyBlocks[editingBlockIndex] && (
+                 <>
+                    <div className={`p-3 rounded-lg ${theme.subtleBg} border ${theme.border} max-h-[200px] overflow-y-auto text-sm opacity-80`}>
+                        <div className="font-bold text-xs mb-1 uppercase opacity-60">Nội dung gốc:</div>
+                        {storyBlocks[editingBlockIndex].content}
+                    </div>
+
+                    <div>
+                        <label className={`block text-sm font-medium ${theme.textAccent} mb-2`}>
+                            Yêu cầu sửa đổi / Viết lại
+                            <Tooltip text="Nhập hướng dẫn cụ thể cho AI. Ví dụ: 'Viết buồn hơn', 'Đổi tên A thành B', 'Thêm chi tiết trời mưa'..." />
+                        </label>
+                        <textarea
+                            value={rewriteFeedback}
+                            onChange={(e) => setRewriteFeedback(e.target.value)}
+                            placeholder="Nhập yêu cầu của bạn tại đây..."
+                            className={`w-full rounded-lg ${theme.bgCard}/70 border ${theme.border} p-3 outline-none focus:ring-2 ${theme.ring} min-h-[120px] text-sm`}
+                        />
+                    </div>
+
+                    <div className="flex gap-3 pt-2">
+                        <button 
+                            onClick={handleRewriteStoryBlock}
+                            disabled={isRewriting || !rewriteFeedback.trim()}
+                            className={`flex-1 py-2 rounded-lg font-semibold ${theme.buttonPrimary} text-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2`}
+                        >
+                            {isRewriting ? (
+                                <>
+                                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                    Đang viết lại...
+                                </>
+                            ) : "Viết lại ngay"}
+                        </button>
+                         <button 
+                            onClick={() => setIsRewriteModalOpen(false)}
+                            className={`px-4 py-2 rounded-lg font-semibold border ${theme.borderLight} hover:bg-white/10`}
+                        >
+                            Đóng
+                        </button>
+                    </div>
+                 </>
+             )}
+         </div>
+      </Modal>
+
       {/* Guide Modal (Two Tabs) */}
       <Modal 
         isOpen={isGuideModalOpen} 
@@ -835,6 +942,7 @@ export default function App() {
                        <li>Đã có file truyện .txt? &rarr; Dùng tính năng <b>Upload</b> để AI viết kịch bản review ngay lập tức.</li>
                     </ul>
                   </li>
+                  <li><b>Phản hồi & Viết lại (MỚI):</b> Không ưng ý đoạn nào? Bấm ""Sửa / Viết lại"", nhập ý muốn của bạn, AI sẽ sửa lại ngay lập tức cho đến khi bạn hài lòng.</li>
                   <li><b>Đa thị trường:</b> Hỗ trợ làm content cho cả Việt Nam và Global (US). Cấu hình tên Kênh/MC tự động chuyển đổi theo ngôn ngữ bạn chọn.</li>
                   <li><b>Bảo mật & Ổn định:</b> Sử dụng API Key cá nhân của bạn. Hệ thống hỗ trợ nhập nhiều key dự phòng để tự động chuyển đổi khi hết hạn ngạch (quota).</li>
                 </ul>
@@ -879,10 +987,10 @@ export default function App() {
               <div className="flex gap-3">
                 <div className={`flex-none w-6 h-6 rounded-full ${theme.badge} text-white flex items-center justify-center font-bold text-xs`}>3</div>
                 <div>
-                  <div className="font-semibold text-base mb-1">Viết chi tiết & Chuyển thể Script</div>
+                  <div className="font-semibold text-base mb-1">Viết chi tiết & Chỉnh sửa</div>
                   <ul className="list-disc list-inside opacity-80 space-y-1">
                     <li>Nếu dùng Cách 1 (Tạo sườn): Nhấn <b>Viết Truyện (Theo sườn)</b>. AI sẽ viết chi tiết từng chương.</li>
-                    <li>Sau khi có nội dung truyện (từ AI hoặc Upload): Nhấn <b>Review Truyện</b>. Đây là bước quan trọng nhất. AI sẽ đóng vai MC, chuyển đổi văn bản đọc thành văn bản nói (kịch bản thu âm), thêm các câu cảm thán, dẫn dắt, phân tích sâu sắc.</li>
+                    <li><b>Tính năng mới:</b> Tại mục ""Nội dung truyện"", bạn có thể bấm nút <b>Sửa / Viết lại</b> ở từng chương. Nhập yêu cầu (VD: ""Viết buồn hơn"", ""Đổi tên nhân vật"") và AI sẽ viết lại đoạn đó.</li>
                   </ul>
                 </div>
               </div>
@@ -892,9 +1000,9 @@ export default function App() {
                 <div>
                   <div className="font-semibold text-base mb-1">Đóng gói & Xuất bản</div>
                   <ul className="list-disc list-inside opacity-80 space-y-1">
+                    <li>Nhấn <b>Review Truyện</b> để AI đóng vai MC, chuyển đổi văn bản đọc thành văn bản nói (kịch bản thu âm).</li>
                     <li>Nhấn <b>Tạo SEO</b> để lấy Tiêu đề giật tít, Mô tả video chuẩn SEO Youtube và Hashtag.</li>
-                    <li>Nhấn <b>Tạo Prompt</b> để lấy các câu lệnh vẽ hình (dùng cho Midjourney/Leonardo) nhằm tạo Thumbnail và Video footage.</li>
-                    <li>Cuối cùng, nhấn các nút <b>Tải CSV</b> ở từng mục để lưu nội dung về máy.</li>
+                    <li>Nhấn <b>Tạo Prompt</b> để lấy các câu lệnh vẽ hình.</li>
                   </ul>
                 </div>
               </div>

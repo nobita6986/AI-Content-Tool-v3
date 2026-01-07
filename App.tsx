@@ -67,8 +67,8 @@ const AVAILABLE_MODELS = [
   { id: 'gemini-2.5-flash-preview', name: 'Gemini 2.5 Flash', desc: 'Mô hình Flash thế hệ 2.5 nhanh và rẻ', group: 'Instant' },
   { id: 'gpt-5.2-auto', name: 'GPT-5.2 Auto', desc: 'Quyết định thời gian suy nghĩ (GPT-4o)', group: 'Auto' },
   { id: 'gpt-5.2-instant', name: 'GPT-5.2 Instant', desc: 'Trả lời ngay lập tức (GPT-4o Mini)', group: 'Instant' },
-  { id: 'gpt-5.2-thinking', name: 'GPT-5.2 Thinking', desc: 'Suy nghĩ lâu hơn để cho câu trả lời tốt hơn (o1-preview)', group: 'Thinking' },
-  { id: 'gpt-5.2-pro', name: 'GPT-5.2 Pro', desc: 'Trí thông minh phục vụ nghiên cứu (GPT-4 Turbo)', group: 'Pro' },
+  { id: 'gpt-5.2-thinking', name: 'GPT-5.2 Thinking', desc: 'Suy nghĩ lâu hơn (o1-preview hoặc GPT-4o CoT)', group: 'Thinking' },
+  { id: 'gpt-5.2-pro', name: 'GPT-5.2 Pro', desc: 'Trí thông minh phục vụ nghiên cứu (GPT-4o)', group: 'Pro' },
 ];
 
 const getThemeStyles = (color: ThemeColor) => {
@@ -264,6 +264,7 @@ export default function App() {
 
   const handleSaveKeys = () => {
     const trimmedGemini = apiKeyGemini.split('\n').map(k => k.trim()).filter(k => k).join('\n');
+    // Ensure OpenAI keys are also newline separated and trimmed properly for multi-key support
     const trimmedOpenAI = apiKeyOpenAI.split('\n').map(k => k.trim()).filter(k => k).join('\n');
 
     setApiKeyGemini(trimmedGemini);

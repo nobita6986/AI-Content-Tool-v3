@@ -122,100 +122,119 @@ const executeOpenAIRequest = async (
     if (keys.length === 0) throw new Error("Missing OpenAI API Key.");
 
     // 2. Map UI Models to Real OpenAI Models
+    // Use most standard/stable models to avoid 404s on restricted tiers
     let realModel = params.model;
+    
+    // Fallback logic enabled specifically for "Thinking" models that might be 404
+    let enableFallback = false;
+
     if (realModel.includes('gpt-5.2')) {
-        // Strict mapping based on user intent for these UI placeholders
         if (realModel.includes('instant')) {
-            realModel = 'gpt-4o-mini'; // Fast & Cheap
+            realModel = 'gpt-4o-mini'; // Reliable fast model
         } else if (realModel.includes('thinking')) {
-            realModel = 'o1-preview'; // Reasoning
-        } else if (realModel.includes('pro')) {
-            realModel = 'gpt-4-turbo'; // Robust
+            realModel = 'o1-preview'; // Specific model, but might 404
+            enableFallback = true;
         } else {
-            realModel = 'gpt-4o'; // Auto/Default
+            // For Auto and Pro, use gpt-4o (Current Flagship, universally available on paid tiers)
+            // Avoid gpt-4-turbo or specific snapshots that might be restricted
+            realModel = 'gpt-4o'; 
         }
     } else if (!realModel.startsWith('gpt') && !realModel.startsWith('o1')) {
-        // If somehow a gemini model passed here, fallback to GPT-4o
         realModel = 'gpt-4o';
     }
 
-    // 3. Prepare Payload
-    const messages = [];
-    if (params.systemInstruction && !realModel.startsWith('o1')) {
-        // o1-preview does not support 'system' role yet in some tiers, usually 'developer' or just 'user'
-        // For broad compatibility, use system for gpt-4* and merge into user for o1 if needed.
-        messages.push({ role: "system", content: params.systemInstruction });
-    } else if (params.systemInstruction && realModel.startsWith('o1')) {
-         // Prepend system instruction to user prompt for o1 models
-         // as they strictly validate role types in early access
-    }
+    // Helper to build request body
+    const createBody = (targetModel: string) => {
+        const messages = [];
+        let finalSystem = params.systemInstruction;
+        let finalUser = params.prompt;
 
-    let userContent = params.prompt;
-    if (params.systemInstruction && realModel.startsWith('o1')) {
-        userContent = `[INSTRUCTION]: ${params.systemInstruction}\n\n[TASK]: ${params.prompt}`;
-    }
-
-    if (params.expectJson) {
-        if (!userContent.toLowerCase().includes("json")) {
-            userContent += "\n\nRETURN JSON FORMAT.";
+        // O1-preview compatibility: Does not support system messages well yet, implies CoT
+        if (targetModel.startsWith('o1')) {
+            if (finalSystem) {
+                finalUser = `[INSTRUCTION]: ${finalSystem}\n\n[TASK]: ${finalUser}`;
+            }
+        } else {
+            if (finalSystem) {
+                messages.push({ role: "system", content: finalSystem });
+            }
         }
-    }
-    messages.push({ role: "user", content: userContent });
 
-    const body: any = {
-        model: realModel,
-        messages: messages,
+        if (params.expectJson) {
+            if (!finalUser.toLowerCase().includes("json")) {
+                finalUser += "\n\nRETURN JSON FORMAT.";
+            }
+        }
+        messages.push({ role: "user", content: finalUser });
+
+        const body: any = {
+            model: targetModel,
+            messages: messages,
+        };
+
+        if (params.expectJson && !targetModel.startsWith('o1')) {
+            body.response_format = { type: "json_object" };
+        }
+
+        if (params.temperature !== undefined && !targetModel.startsWith('o1')) {
+             body.temperature = params.temperature;
+        }
+        return body;
     };
-
-    if (params.expectJson && !realModel.startsWith('o1')) {
-        body.response_format = { type: "json_object" };
-    }
-
-    if (params.temperature !== undefined && !realModel.startsWith('o1')) {
-         body.temperature = params.temperature;
-    }
 
     let lastError: any = null;
 
     // 4. Execution Loop with Failover
     for (let i = 0; i < keys.length; i++) {
         const apiKey = keys[i];
-        try {
-            const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        
+        // Inner function to try fetch
+        const doFetch = async (modelToUse: string): Promise<any> => {
+             const response = await fetch("https://api.openai.com/v1/chat/completions", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                     "Authorization": `Bearer ${apiKey}`
                 },
-                body: JSON.stringify(body)
+                body: JSON.stringify(createBody(modelToUse))
             });
-
             if (!response.ok) {
-                // Check for retryable status codes (429: Too Many Requests, 5xx: Server Errors)
-                if (response.status === 429 || response.status >= 500) {
-                    console.warn(`OpenAI Key [${i}] (${apiKey.slice(0, 8)}...) failed with status ${response.status}. Switching key...`);
-                    // If not the last key, loop continues
-                    if (i < keys.length - 1) continue; 
+                const errText = await response.text();
+                // Check if 404 and model was o1
+                if (response.status === 404 && modelToUse === 'o1-preview' && enableFallback) {
+                    console.warn(`Model o1-preview not found (404). Falling back to gpt-4o...`);
+                    // Recursively try fallback model ONCE
+                    return doFetch('gpt-4o'); 
                 }
                 
-                const errText = await response.text();
                 let errJson;
                 try { errJson = JSON.parse(errText); } catch(e) {}
-                throw new Error(`OpenAI Error (${response.status}): ${errJson?.error?.message || errText}`);
+                const errMsg = errJson?.error?.message || errText;
+                
+                // Throw error object with status for outer loop handling
+                const error: any = new Error(`OpenAI Error (${response.status}): ${errMsg}`);
+                error.status = response.status;
+                throw error;
             }
+            return response.json();
+        };
 
-            const data = await response.json();
+        try {
+            const data = await doFetch(realModel);
+            // Handle fallback case where doFetch returns fallback data
             return data.choices[0].message.content;
 
         } catch (error: any) {
-            console.error(`OpenAI Request failed with key [${i}]`, error);
+            console.error(`OpenAI Key [${i}] failed`, error);
             lastError = error;
-            // If it was a fetch network error (no response), likely retryable if we have more keys
-            if (i < keys.length - 1 && !error.message?.includes("OpenAI Error")) {
+
+            // Retry logic for Quota/Server errors
+            if ((error.status === 429 || error.status >= 500) && i < keys.length - 1) {
+                 console.warn(`Switching key due to error ${error.status}...`);
                  continue;
             }
-            // If we caught the explicit error thrown above, the 'continue' logic inside if(!response.ok) handles it.
-            // This catch block handles network failures.
+            // If it's a 401 (Auth) or other non-retryable error, we might still want to try next key if user pasted bad key
+            if (i < keys.length - 1) continue;
         }
     }
 

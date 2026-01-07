@@ -60,15 +60,15 @@ const THEME_PRESETS: Record<ThemeColor, { name: string; labelEn: string; hex: st
 };
 
 const AVAILABLE_MODELS = [
-  { id: 'gemini-2.0-flash-thinking-exp-01-21', name: 'Gemini 2.0 Flash Thinking', desc: 'Suy nghĩ lâu hơn để cho câu trả lời tốt hơn (Recommended)', group: 'Thinking' },
   { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro (Preview)', desc: 'Trí thông minh phục vụ nghiên cứu sâu', group: 'Pro' },
+  { id: 'gemini-2.0-flash-thinking-exp-01-21', name: 'Gemini 2.0 Flash Thinking', desc: 'Suy nghĩ lâu hơn để cho câu trả lời tốt hơn (Recommended)', group: 'Thinking' },
   { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash (Preview)', desc: 'Tốc độ nhanh, phản hồi tức thì', group: 'Instant' },
   { id: 'gemini-2.5-pro-preview', name: 'Gemini 2.5 Pro', desc: 'Mô hình Pro thế hệ 2.5 cân bằng', group: 'Pro' },
   { id: 'gemini-2.5-flash-preview', name: 'Gemini 2.5 Flash', desc: 'Mô hình Flash thế hệ 2.5 nhanh và rẻ', group: 'Instant' },
-  { id: 'gpt-5.2-auto', name: 'GPT-5.2 Auto', desc: 'Quyết định thời gian suy nghĩ', group: 'Auto' },
-  { id: 'gpt-5.2-instant', name: 'GPT-5.2 Instant', desc: 'Trả lời ngay lập tức', group: 'Instant' },
-  { id: 'gpt-5.2-thinking', name: 'GPT-5.2 Thinking', desc: 'Suy nghĩ lâu hơn để cho câu trả lời tốt hơn', group: 'Thinking' },
-  { id: 'gpt-5.2-pro', name: 'GPT-5.2 Pro', desc: 'Trí thông minh phục vụ nghiên cứu', group: 'Pro' },
+  { id: 'gpt-5.2-auto', name: 'GPT-5.2 Auto', desc: 'Quyết định thời gian suy nghĩ (GPT-4o)', group: 'Auto' },
+  { id: 'gpt-5.2-instant', name: 'GPT-5.2 Instant', desc: 'Trả lời ngay lập tức (GPT-4o Mini)', group: 'Instant' },
+  { id: 'gpt-5.2-thinking', name: 'GPT-5.2 Thinking', desc: 'Suy nghĩ lâu hơn để cho câu trả lời tốt hơn (o1-preview)', group: 'Thinking' },
+  { id: 'gpt-5.2-pro', name: 'GPT-5.2 Pro', desc: 'Trí thông minh phục vụ nghiên cứu (GPT-4 Turbo)', group: 'Pro' },
 ];
 
 const getThemeStyles = (color: ThemeColor) => {
@@ -160,7 +160,8 @@ export default function App() {
      return Math.max(3, Math.ceil(durationMin / 2.5));
   }, [durationMin, isAutoDuration]);
 
-  const [selectedModel, setSelectedModel] = useState("gemini-2.0-flash-thinking-exp-01-21");
+  // DEFAULT MODEL CHANGED TO GEMINI 3 PRO PREVIEW
+  const [selectedModel, setSelectedModel] = useState("gemini-3-pro-preview");
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
   
   // -- Modals --
@@ -263,7 +264,7 @@ export default function App() {
 
   const handleSaveKeys = () => {
     const trimmedGemini = apiKeyGemini.split('\n').map(k => k.trim()).filter(k => k).join('\n');
-    const trimmedOpenAI = apiKeyOpenAI.trim();
+    const trimmedOpenAI = apiKeyOpenAI.split('\n').map(k => k.trim()).filter(k => k).join('\n');
 
     setApiKeyGemini(trimmedGemini);
     setApiKeyOpenAI(trimmedOpenAI);
@@ -603,10 +604,6 @@ export default function App() {
 
   return (
     <div className={`min-h-screen w-full font-sans transition-colors duration-500 ${theme.bg} ${theme.textMain}`}>
-        {/* ... (RENDER LOGIC REMAINS IDENTICAL TO PREVIOUS VERSION, NO CHANGES IN JSX STRUCTURE NEEDED, ONLY HANDLERS UPDATED ABOVE) ... */}
-        {/* For brevity, I am not repeating the entire 800 lines of JSX if the logic is correct. 
-            The critical part is ensuring the `handleGenerate*` functions above are using the updated `geminiService` calls.
-            I will include the render to ensure the file is complete. */}
         <header className={`px-6 py-8 border-b ${theme.border} sticky top-0 backdrop-blur bg-black/30 z-20`}>
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <a href="/" className="group transition-transform hover:scale-105 ml-4" onClick={(e) => { e.preventDefault(); createNewSession(); }}>
@@ -691,10 +688,9 @@ export default function App() {
       <main className="max-w-7xl mx-auto p-6 grid lg:grid-cols-3 gap-6">
         <section className="lg:col-span-1 space-y-6">
           <Card title="1) Thông tin sách & Cài đặt">
+            {/* ... (CONTENT INSIDE CARD REMAINS SAME) ... */}
             <div className="space-y-4">
-               {/* --- MODE & GENRE SELECTOR --- */}
                <div className={`p-3 rounded-lg border ${theme.borderLight} bg-slate-900/40 space-y-3`}>
-                  {/* Toggle Mode */}
                   <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800 relative">
                      <div 
                         className={`absolute top-1 bottom-1 w-[50%] rounded transition-all duration-300 ${theme.bgButton} border border-white/10`}
@@ -714,7 +710,6 @@ export default function App() {
                      </button>
                   </div>
 
-                  {/* Genre Dropdown */}
                   <div>
                     <label className={`block text-xs font-medium ${theme.textAccent} mb-1`}>
                       Thể loại cụ thể (Phong cách viết sẽ thay đổi theo)
@@ -834,6 +829,8 @@ export default function App() {
           </Card>
         </section>
 
+        {/* ... (RIGHT COLUMN SECTIONS UNCHANGED) ... */}
+        {/* Render for Kịch bản khung, Nội dung Truyện, Review Script, SEO, Prompts remains identical */}
         <section className="lg:col-span-2 space-y-6">
           <Card title="3) Kịch bản khung" actions={
               <ThemedButton onClick={handleGenerateOutline} disabled={isGlobalLoading || isStoryUploaded} className="text-xs px-2 py-1 h-8">Tạo Kịch bản khung</ThemedButton>
@@ -944,7 +941,6 @@ export default function App() {
             </div>
           </Card>
           
-          {/* ... Remaining cards (Script, SEO, Prompts) are unchanged in logic but included in full code block ... */}
           <Card title="5) Review Script (Kịch bản Audio)" actions={
              <div className="flex gap-2">
                <ThemedButton onClick={exportScriptCSV} disabled={scriptBlocks.length === 0} className="text-xs px-2 py-1 h-8">Tải CSV</ThemedButton>
@@ -1024,7 +1020,6 @@ export default function App() {
         </section>
       </main>
 
-      {/* ... Modals (API, Guide, ExtraConfig, Library, Rewrite, Evaluation) remain largely same structure but are included to maintain file integrity ... */}
       <Modal isOpen={isApiModalOpen} onClose={() => setIsApiModalOpen(false)} title="API Configuration">
         <div className="space-y-4">
             <div className={`p-3 rounded-lg border ${theme.borderLight} bg-blue-900/10 text-sm`}>
@@ -1083,8 +1078,16 @@ export default function App() {
               />
             </div>
              <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">OpenAI API Key (Optional)</label>
-              <input type="password" value={apiKeyOpenAI} onChange={(e) => setApiKeyOpenAI(e.target.value)} className={`w-full rounded border ${theme.border} bg-slate-950 px-3 py-2 text-white focus:ring-2 ${theme.ring}`} placeholder="sk-..." />
+              <label className="block text-sm font-medium text-slate-300 mb-1 flex justify-between">
+                 <span>OpenAI API Keys (Optional)</span>
+                 <span className="text-[10px] text-emerald-400 bg-emerald-900/30 px-2 py-0.5 rounded">Multi-key Auto-switch Supported</span>
+              </label>
+              <textarea 
+                  value={apiKeyOpenAI} 
+                  onChange={(e) => setApiKeyOpenAI(e.target.value)} 
+                  className={`w-full h-32 rounded border ${theme.border} bg-slate-950 px-3 py-2 text-white focus:ring-2 ${theme.ring} text-xs font-mono`} 
+                  placeholder={`sk-...\nsk-...\n(Mỗi dòng 1 key, tự động chuyển khi lỗi)`} 
+              />
             </div>
             <div className="pt-2 flex justify-end">
                 <ThemedButton onClick={handleSaveKeys} className={`${theme.buttonPrimary} text-white`}>Lưu API Key</ThemedButton>
@@ -1092,6 +1095,7 @@ export default function App() {
         </div>
       </Modal>
 
+      {/* ... (OTHER MODALS: Guide, ExtraConfig, Library, Rewrite, Evaluation UNCHANGED) ... */}
       <Modal isOpen={isGuideModalOpen} onClose={() => setIsGuideModalOpen(false)} title="Hướng dẫn & Mẹo">
         <div className="flex gap-4 border-b border-gray-700 mb-4">
            <button onClick={() => setActiveGuideTab('strengths')} className={`pb-2 px-1 text-sm font-medium transition-colors ${activeGuideTab === 'strengths' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-slate-400 hover:text-slate-200'}`}>Điểm mạnh Tool</button>

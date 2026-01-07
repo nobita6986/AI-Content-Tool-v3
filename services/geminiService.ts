@@ -111,80 +111,115 @@ const executeOpenAIRequest = async (
     },
     keyConfig: string | ApiKeyConfig | undefined
 ): Promise<string> => {
-    let apiKey = "";
-    if (typeof keyConfig === 'object' && keyConfig.openai) apiKey = keyConfig.openai;
-    // Fallback if user put openai key in string (unlikely but safe)
-    if (!apiKey && typeof keyConfig === 'string' && keyConfig.startsWith('sk-')) apiKey = keyConfig;
+    // 1. Extract and Parse Keys
+    let rawKey = "";
+    if (typeof keyConfig === 'object' && keyConfig.openai) rawKey = keyConfig.openai;
+    else if (typeof keyConfig === 'string' && keyConfig.startsWith('sk-')) rawKey = keyConfig;
     
-    if (!apiKey) throw new Error("Missing OpenAI API Key.");
+    // Split by newline and trim to support multi-key input
+    const keys = rawKey.split('\n').map(k => k.trim()).filter(k => k.length > 0);
+    
+    if (keys.length === 0) throw new Error("Missing OpenAI API Key.");
 
-    // Map "GPT-5.2" placeholders to real models
+    // 2. Map UI Models to Real OpenAI Models
     let realModel = params.model;
     if (realModel.includes('gpt-5.2')) {
-        if (realModel.includes('instant')) realModel = 'gpt-4o-mini';
-        else if (realModel.includes('thinking')) realModel = 'o1-preview'; // Or gpt-4o if not available
-        else realModel = 'gpt-4o'; // Auto/Pro default to 4o
-    }
-    // Fallback for generic 'gpt'
-    if (realModel === 'gpt-4o' || realModel === 'gpt-4-turbo' || realModel === 'gpt-3.5-turbo') {
-        // keep as is
+        // Strict mapping based on user intent for these UI placeholders
+        if (realModel.includes('instant')) {
+            realModel = 'gpt-4o-mini'; // Fast & Cheap
+        } else if (realModel.includes('thinking')) {
+            realModel = 'o1-preview'; // Reasoning
+        } else if (realModel.includes('pro')) {
+            realModel = 'gpt-4-turbo'; // Robust
+        } else {
+            realModel = 'gpt-4o'; // Auto/Default
+        }
     } else if (!realModel.startsWith('gpt') && !realModel.startsWith('o1')) {
+        // If somehow a gemini model passed here, fallback to GPT-4o
         realModel = 'gpt-4o';
     }
 
+    // 3. Prepare Payload
     const messages = [];
-    if (params.systemInstruction) {
+    if (params.systemInstruction && !realModel.startsWith('o1')) {
+        // o1-preview does not support 'system' role yet in some tiers, usually 'developer' or just 'user'
+        // For broad compatibility, use system for gpt-4* and merge into user for o1 if needed.
         messages.push({ role: "system", content: params.systemInstruction });
+    } else if (params.systemInstruction && realModel.startsWith('o1')) {
+         // Prepend system instruction to user prompt for o1 models
+         // as they strictly validate role types in early access
     }
-    messages.push({ role: "user", content: params.prompt });
 
-    // Handle O1 models specific (they don't support system role or temperature sometimes)
-    if (realModel.startsWith('o1')) {
-        // o1 currently treats developer/system messages differently or restricts them
-        // For simplicity, merge system into user for o1 if needed, or just keep standard
-        // O1-preview allows user messages.
+    let userContent = params.prompt;
+    if (params.systemInstruction && realModel.startsWith('o1')) {
+        userContent = `[INSTRUCTION]: ${params.systemInstruction}\n\n[TASK]: ${params.prompt}`;
     }
+
+    if (params.expectJson) {
+        if (!userContent.toLowerCase().includes("json")) {
+            userContent += "\n\nRETURN JSON FORMAT.";
+        }
+    }
+    messages.push({ role: "user", content: userContent });
 
     const body: any = {
         model: realModel,
         messages: messages,
     };
 
-    if (params.expectJson) {
+    if (params.expectJson && !realModel.startsWith('o1')) {
         body.response_format = { type: "json_object" };
-        // Ensure prompt asks for JSON to avoid OpenAI 400 error
-        if (!params.prompt.toLowerCase().includes("json")) {
-            messages[messages.length-1].content += "\n\nRETURN JSON FORMAT.";
-        }
     }
 
     if (params.temperature !== undefined && !realModel.startsWith('o1')) {
          body.temperature = params.temperature;
     }
 
-    try {
-        const response = await fetch("https://api.openai.com/v1/chat/completions", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${apiKey}`
-            },
-            body: JSON.stringify(body)
-        });
+    let lastError: any = null;
 
-        if (!response.ok) {
-            const errText = await response.text();
-            let errJson;
-            try { errJson = JSON.parse(errText); } catch(e) {}
-            throw new Error(`OpenAI Error (${response.status}): ${errJson?.error?.message || errText}`);
+    // 4. Execution Loop with Failover
+    for (let i = 0; i < keys.length; i++) {
+        const apiKey = keys[i];
+        try {
+            const response = await fetch("https://api.openai.com/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${apiKey}`
+                },
+                body: JSON.stringify(body)
+            });
+
+            if (!response.ok) {
+                // Check for retryable status codes (429: Too Many Requests, 5xx: Server Errors)
+                if (response.status === 429 || response.status >= 500) {
+                    console.warn(`OpenAI Key [${i}] (${apiKey.slice(0, 8)}...) failed with status ${response.status}. Switching key...`);
+                    // If not the last key, loop continues
+                    if (i < keys.length - 1) continue; 
+                }
+                
+                const errText = await response.text();
+                let errJson;
+                try { errJson = JSON.parse(errText); } catch(e) {}
+                throw new Error(`OpenAI Error (${response.status}): ${errJson?.error?.message || errText}`);
+            }
+
+            const data = await response.json();
+            return data.choices[0].message.content;
+
+        } catch (error: any) {
+            console.error(`OpenAI Request failed with key [${i}]`, error);
+            lastError = error;
+            // If it was a fetch network error (no response), likely retryable if we have more keys
+            if (i < keys.length - 1 && !error.message?.includes("OpenAI Error")) {
+                 continue;
+            }
+            // If we caught the explicit error thrown above, the 'continue' logic inside if(!response.ok) handles it.
+            // This catch block handles network failures.
         }
-
-        const data = await response.json();
-        return data.choices[0].message.content;
-    } catch (error) {
-        console.error("OpenAI Request Failed", error);
-        throw error;
     }
+
+    throw lastError || new Error("All OpenAI keys failed.");
 };
 
 // --- UNIFIED GENERATOR ---
@@ -200,6 +235,7 @@ const generateText = async (
     keys: string | ApiKeyConfig | undefined
 ): Promise<string> => {
     // ROUTING LOGIC
+    // Use OpenAI if model name contains 'gpt' or starts with 'o1'
     if (params.model.toLowerCase().includes('gpt') || params.model.toLowerCase().startsWith('o1')) {
         return executeOpenAIRequest({
             model: params.model,
@@ -209,7 +245,7 @@ const generateText = async (
             temperature: params.temperature
         }, keys);
     } else {
-        // Gemini
+        // Default to Gemini
         return executeGeminiRequest({
             model: params.model,
             prompt: params.prompt,

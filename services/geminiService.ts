@@ -499,6 +499,7 @@ export const evaluateStory = async (
     return generateText({ model, prompt }, apiKeys);
 };
 
+// Old Fallback
 export const chunkText = (text: string, maxChars: number = 2000): string[] => {
     const chunks: string[] = [];
     let currentChunk = "";
@@ -512,4 +513,54 @@ export const chunkText = (text: string, maxChars: number = 2000): string[] => {
     }
     if (currentChunk.trim().length > 0) chunks.push(currentChunk);
     return chunks;
+};
+
+// New Smart Split Logic
+export const splitStoryByChapters = (text: string): { title: string, content: string }[] => {
+    const lines = text.split('\n');
+    const sections: { title: string, content: string }[] = [];
+    
+    // Regex to detect chapter headers (e.g., "Phần 1", "Chương 10", "Chapter 5", "Part 2", "Hồi 10")
+    // Case insensitive, handles optional Markdown bolding (**, ##, __) or whitespace/punctuation
+    // Detects line starting with these keywords followed by number
+    const headerRegex = /^[\s#*_-]*(Phần|Chương|Chapter|Part|Hồi)\s+\d+/i;
+
+    let currentTitle = "Mở đầu / Giới thiệu";
+    let currentContent: string[] = [];
+
+    // Check if the very first line looks like a header
+    if (lines.length > 0 && headerRegex.test(lines[0])) {
+        currentTitle = lines[0].replace(/[*#_]/g, '').trim();
+        lines.shift(); // Remove first line as it's the title
+    }
+
+    for (const line of lines) {
+        const trimmedLine = line.trim();
+        // Check if line matches header pattern AND is reasonably short (titles usually aren't whole paragraphs)
+        if (headerRegex.test(trimmedLine) && trimmedLine.length < 100) {
+            // Save previous section if it has content
+            if (currentContent.length > 0) {
+                sections.push({
+                    title: currentTitle,
+                    content: currentContent.join('\n')
+                });
+            }
+            
+            // Start new section
+            currentTitle = trimmedLine.replace(/[*#_]/g, '').trim(); // Clean markdown chars
+            currentContent = [];
+        } else {
+            currentContent.push(line);
+        }
+    }
+
+    // Push the last section
+    if (currentContent.length > 0 || sections.length === 0) {
+        sections.push({
+            title: currentTitle,
+            content: currentContent.join('\n')
+        });
+    }
+
+    return sections;
 };

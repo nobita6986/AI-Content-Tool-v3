@@ -386,10 +386,29 @@ export default function App() {
     reader.onload = (event) => {
         const text = event.target?.result as string;
         if (text) {
-            const chunks = geminiService.chunkText(text, 3000);
-            const newBlocks: StoryBlock[] = chunks.map((chunk, idx) => ({
-                index: idx + 1, title: `${language === 'vi' ? 'Phần' : 'Part'} ${idx + 1} (Upload)`, content: chunk
-            }));
+            // Updated to use Smart Split by Chapters/Parts regex
+            const chapters = geminiService.splitStoryByChapters(text);
+            
+            // If the smart split failed to find distinct chapters (e.g. just one big block) 
+            // AND the text is very long, fall back to chunking.
+            // Otherwise, use the smart split results.
+            let newBlocks: StoryBlock[] = [];
+            
+            if (chapters.length === 1 && chapters[0].content.length > 10000) {
+                 const chunks = geminiService.chunkText(text, 3000);
+                 newBlocks = chunks.map((chunk, idx) => ({
+                    index: idx + 1, 
+                    title: `${language === 'vi' ? 'Phần' : 'Part'} ${idx + 1} (Upload)`, 
+                    content: chunk
+                }));
+            } else {
+                newBlocks = chapters.map((chap, idx) => ({
+                    index: idx + 1,
+                    title: chap.title,
+                    content: chap.content
+                }));
+            }
+
             setStoryBlocks(newBlocks); setOutline([]); setStoryMetadata(undefined); setScriptBlocks([]); 
             setRewrittenIndices(new Set()); setIsStoryUploaded(true); setToastMessage(`Đã upload truyện "${fileName}" thành công.`);
             e.target.value = ''; 

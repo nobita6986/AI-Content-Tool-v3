@@ -4,12 +4,14 @@ import { OutlineItem, SEOResult, Language, StoryMetadata, StoryMode } from '../t
 
 /**
  * Execute a Google GenAI operation using provided apiKey or process.env.API_KEY.
+ * Supports MULTI-KEY FAILOVER: If an array of keys (newline separated string) is provided,
+ * it will try them sequentially if a Quota/Availability error occurs.
  */
 const executeGenAIRequest = async <T>(
     operation: (ai: GoogleGenAI) => Promise<T>,
-    apiKey?: string
+    apiKeyOrKeys?: string
 ): Promise<T> => {
-    let rawKey = apiKey;
+    let rawKey = apiKeyOrKeys;
 
     // Fallback to env key safely
     if (!rawKey) {
@@ -22,20 +24,44 @@ const executeGenAIRequest = async <T>(
     }
     rawKey = rawKey || "";
 
-    const googleKeyMatch = rawKey.match(/AIza[0-9A-Za-z\-_]{35}/);
-    let key = googleKeyMatch ? googleKeyMatch[0] : "";
+    // Parse keys: Split by newline, trim, and remove empty strings
+    const keys = rawKey.split('\n').map(k => {
+        const match = k.match(/AIza[0-9A-Za-z\-_]{35}/);
+        return match ? match[0] : k.trim();
+    }).filter(k => k.length > 0);
 
-    if (!key) {
-        const cleaned = rawKey.replace(/[\s"'\r\n]/g, '').replace(/[^\x21-\x7E]/g, '');
-        if (cleaned.length > 0) key = cleaned;
-    }
-
-    if (!key) {
+    if (keys.length === 0) {
         throw new Error("Missing API Key: Please configure your Gemini API Key in Settings.");
     }
 
-    const ai = new GoogleGenAI({ apiKey: key });
-    return await operation(ai);
+    let lastError: any = null;
+
+    // Loop through keys for failover
+    for (let i = 0; i < keys.length; i++) {
+        const currentKey = keys[i];
+        try {
+            const ai = new GoogleGenAI({ apiKey: currentKey });
+            return await operation(ai);
+        } catch (error: any) {
+            console.warn(`API Key ending in ...${currentKey.slice(-4)} failed.`, error);
+            lastError = error;
+
+            // Check for specific errors to trigger failover (429: Too Many Requests, 503: Service Unavailable, 500: Internal Error)
+            // If it's a content safety error (finishReason), switching keys won't help, so we might throw immediately? 
+            // For now, aggressive rotation on any HTTP error status.
+            const isRetryable = error.status === 429 || error.status === 503 || error.status === 500 || error.message?.includes("quota") || error.message?.includes("limit");
+            
+            if (isRetryable && i < keys.length - 1) {
+                console.log(`Switching to next API key... (${i + 1}/${keys.length})`);
+                continue; // Try next key
+            } else {
+                // If it's the last key or not a retryable error, throw.
+                throw error;
+            }
+        }
+    }
+
+    throw lastError || new Error("Unknown error occurred during API request.");
 };
 
 export const slugify = (s: string): string => {
@@ -152,9 +178,12 @@ export const generateOutline = async (
            2. ${structurePrompt}
            3. Return JSON with character metadata (char1, char2, char3) and chapters.`;
 
+    // Map GPT models to Gemini equivalent for now to prevent breaking, or use the model as is if valid Gemini
+    const effectiveModel = model.includes('gpt') ? 'gemini-3-pro-preview' : model;
+
     return executeGenAIRequest(async (ai) => {
         const response = await ai.models.generateContent({
-            model: model.includes('gpt') ? 'gemini-3-pro-preview' : model,
+            model: effectiveModel,
             contents: [{ parts: [{ text: prompt }] }],
             config: {
                 responseMimeType: "application/json",
@@ -304,9 +333,12 @@ export const generateStoryBlock = async (
            3. PURE STORY CONTENT ONLY.
            4. Length: 600-800 words.`;
     
+    // Map GPT models to Gemini equivalent for now to prevent breaking, or use the model as is if valid Gemini
+    const effectiveModel = model.includes('gpt') ? 'gemini-3-flash-preview' : model;
+
     return executeGenAIRequest(async (ai) => {
         const response = await ai.models.generateContent({
-            model: model.includes('gpt') ? 'gemini-3-flash-preview' : model,
+            model: effectiveModel,
             contents: [{ parts: [{ text: prompt }] }],
         });
         return response.text;
@@ -353,9 +385,12 @@ export const rewriteStoryBlock = async (
            2. ${characterContext}
            3. Return ONLY new story text.`;
 
+    // Map GPT models to Gemini equivalent for now to prevent breaking, or use the model as is if valid Gemini
+    const effectiveModel = model.includes('gpt') ? 'gemini-3-flash-preview' : model;
+
     return executeGenAIRequest(async (ai) => {
         const response = await ai.models.generateContent({
-            model: model.includes('gpt') ? 'gemini-3-flash-preview' : model,
+            model: effectiveModel,
             contents: [{ parts: [{ text: prompt }] }],
         });
         return response.text;
@@ -389,9 +424,12 @@ export const generateReviewBlock = async (storyContent: string, chapterTitle: st
            - Analyze psychology, comment on the plot, guide the listener.
            - Natural, conversational tone.`;
     
+    // Map GPT models to Gemini equivalent for now to prevent breaking, or use the model as is if valid Gemini
+    const effectiveModel = model.includes('gpt') ? 'gemini-3-flash-preview' : model;
+
     return executeGenAIRequest(async (ai) => {
         const response = await ai.models.generateContent({
-            model: model.includes('gpt') ? 'gemini-3-flash-preview' : model,
+            model: effectiveModel,
             contents: [{ parts: [{ text: prompt }] }],
         });
         return response.text;
@@ -406,9 +444,12 @@ export const generateSEO = async (bookTitle: string, channelName: string, durati
         ? `Tạo nội dung SEO cho video YouTube về "${bookTitle}". ${channelContext} Dạng Review/Kể chuyện dài ${durationMin} phút. Cung cấp: 8 tiêu đề clickbait, hashtags, keywords (bao gồm tên kênh), và mô tả video chuẩn SEO (nhắc đến tên kênh). JSON format. Ngôn ngữ: Tiếng Việt.`
         : `Generate SEO content for a YouTube video about "${bookTitle}". ${channelContext} Format: Audiobook/Review, ${durationMin} minutes long. Provide: 8 clickbait titles, hashtags, keywords (include channel name), and a SEO-optimized video description (mention channel name). JSON format. Language: English.`;
 
+    // Map GPT models to Gemini equivalent for now to prevent breaking, or use the model as is if valid Gemini
+    const effectiveModel = model.includes('gpt') ? 'gemini-3-pro-preview' : model;
+
     return executeGenAIRequest(async (ai) => {
         const response = await ai.models.generateContent({
-            model: model.includes('gpt') ? 'gemini-3-pro-preview' : model,
+            model: effectiveModel,
             contents: [{ parts: [{ text: prompt }] }],
             config: {
                 responseMimeType: "application/json",
@@ -432,9 +473,12 @@ export const generateSEO = async (bookTitle: string, channelName: string, durati
 export const generateVideoPrompts = async (bookTitle: string, frameRatio: string, language: Language, model: string = 'gemini-3-flash-preview', apiKey?: string): Promise<string[]> => {
     const prompt = `Generate 5 cinematic, photorealistic video prompts for background visuals in a YouTube video about "${bookTitle}". Visuals should match the story's mood. Aspect ratio: ${frameRatio}. No text/logos. JSON array of strings.`;
     
+    // Map GPT models to Gemini equivalent for now to prevent breaking, or use the model as is if valid Gemini
+    const effectiveModel = model.includes('gpt') ? 'gemini-3-flash-preview' : model;
+
     return executeGenAIRequest(async (ai) => {
         const response = await ai.models.generateContent({
-            model: model.includes('gpt') ? 'gemini-3-flash-preview' : model,
+            model: effectiveModel,
             contents: [{ parts: [{ text: prompt }] }],
             config: {
                 responseMimeType: "application/json",
@@ -456,9 +500,12 @@ export const generateThumbIdeas = async (bookTitle: string, durationMin: number,
         ? `Cho video YouTube về "${bookTitle}", đề xuất 5 text thumbnail ngắn gọn, gây tò mò, tiếng Việt. Một ý phải chứa thời lượng: ${durationStr}. JSON array.`
         : `For a YouTube video about "${bookTitle}", suggest 5 short, curiosity-inducing thumbnail texts in English. One idea must include duration: ${durationStr}. JSON array.`;
     
+    // Map GPT models to Gemini equivalent for now to prevent breaking, or use the model as is if valid Gemini
+    const effectiveModel = model.includes('gpt') ? 'gemini-3-flash-preview' : model;
+
     return executeGenAIRequest(async (ai) => {
         const response = await ai.models.generateContent({
-            model: model.includes('gpt') ? 'gemini-3-flash-preview' : model,
+            model: effectiveModel,
             contents: [{ parts: [{ text: prompt }] }],
             config: {
                 responseMimeType: "application/json",
@@ -499,9 +546,12 @@ export const evaluateStory = async (
 
     YÊU CẦU: Trả về Markdown. Chấm điểm chi tiết. Nhận xét thẳng thắn.`;
 
+    // Map GPT models to Gemini equivalent for now to prevent breaking, or use the model as is if valid Gemini
+    const effectiveModel = model.includes('gpt') ? 'gemini-3-pro-preview' : model;
+
     return executeGenAIRequest(async (ai) => {
         const response = await ai.models.generateContent({
-            model: model.includes('gpt') ? 'gemini-3-pro-preview' : model,
+            model: effectiveModel,
             contents: [{ parts: [{ text: prompt }] }],
         });
         return response.text;

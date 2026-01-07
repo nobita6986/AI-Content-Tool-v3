@@ -59,6 +59,16 @@ const THEME_PRESETS: Record<ThemeColor, { name: string; labelEn: string; hex: st
   },
 };
 
+const AVAILABLE_MODELS = [
+  { id: 'gemini-2.0-flash-thinking-exp-01-21', name: 'Gemini 2.0 Flash Thinking', desc: 'Suy nghĩ lâu hơn để cho câu trả lời tốt hơn (Recommended)', group: 'Thinking' },
+  { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro (Preview)', desc: 'Trí thông minh phục vụ nghiên cứu sâu', group: 'Pro' },
+  { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash (Preview)', desc: 'Tốc độ nhanh, phản hồi tức thì', group: 'Instant' },
+  { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Flash', desc: 'Cân bằng giữa tốc độ và chất lượng', group: 'Instant' },
+  // OpenAI Placeholders - In real implementation these would need OpenAI Adapter logic
+  { id: 'gpt-4o', name: 'GPT-4o', desc: 'Mô hình đa phương thức mới nhất của OpenAI', group: 'Pro' },
+  { id: 'gpt-5.2-thinking', name: 'GPT-5.2 Thinking', desc: 'Quyết định thời gian suy nghĩ (Simulation)', group: 'Thinking' },
+];
+
 const getThemeStyles = (color: ThemeColor) => {
   const preset = THEME_PRESETS[color];
   const getGradientTo = () => {
@@ -148,7 +158,8 @@ export default function App() {
      return Math.max(3, Math.ceil(durationMin / 2.5));
   }, [durationMin, isAutoDuration]);
 
-  const [selectedModel, setSelectedModel] = useState("gemini-3-pro-preview");
+  const [selectedModel, setSelectedModel] = useState("gemini-2.0-flash-thinking-exp-01-21");
+  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
   
   // -- Modals --
   const [isApiModalOpen, setIsApiModalOpen] = useState(false);
@@ -203,6 +214,8 @@ export default function App() {
   const currentChannelName = language === 'vi' ? channelNameVi : channelNameEn;
   const currentMcName = language === 'vi' ? mcNameVi : mcNameEn;
 
+  const currentModelInfo = AVAILABLE_MODELS.find(m => m.id === selectedModel) || AVAILABLE_MODELS[0];
+
   // Handle Mode Change
   const handleModeChange = (mode: StoryMode) => {
     setStoryMode(mode);
@@ -215,8 +228,11 @@ export default function App() {
     // API Keys
     const storedGeminiKey = localStorage.getItem("nd_gemini_api_key");
     const storedOpenAIKey = localStorage.getItem("nd_openai_api_key");
+    const storedModel = localStorage.getItem("nd_selected_model");
+
     if (storedGeminiKey) setApiKeyGemini(storedGeminiKey);
     if (storedOpenAIKey) setApiKeyOpenAI(storedOpenAIKey);
+    if (storedModel && AVAILABLE_MODELS.some(m => m.id === storedModel)) setSelectedModel(storedModel);
     
     // Theme
     const storedTheme = localStorage.getItem("nd_theme_color");
@@ -245,7 +261,8 @@ export default function App() {
   }, []);
 
   const handleSaveKeys = () => {
-    const trimmedGemini = apiKeyGemini.trim();
+    // Trim each line
+    const trimmedGemini = apiKeyGemini.split('\n').map(k => k.trim()).filter(k => k).join('\n');
     const trimmedOpenAI = apiKeyOpenAI.trim();
 
     setApiKeyGemini(trimmedGemini);
@@ -253,8 +270,10 @@ export default function App() {
     
     localStorage.setItem("nd_gemini_api_key", trimmedGemini);
     localStorage.setItem("nd_openai_api_key", trimmedOpenAI);
+    localStorage.setItem("nd_selected_model", selectedModel);
+
     setIsApiModalOpen(false);
-    setToastMessage("Đã lưu API Key.");
+    setToastMessage("Đã lưu API Key & Cấu hình Model.");
   };
 
   const handleSaveExtraConfig = () => {
@@ -1170,9 +1189,53 @@ export default function App() {
                     <li><b>OpenAI (Optional):</b> Truy cập <a href="https://platform.openai.com/api-keys" target="_blank" className="text-blue-400 hover:underline">OpenAI Platform</a>.</li>
                 </ul>
             </div>
+
+            {/* --- MODEL SELECTION DROPDOWN --- */}
+            <div className="relative z-50">
+                <label className="block text-sm font-medium text-slate-300 mb-1">Chọn AI Model</label>
+                <button 
+                  onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
+                  className={`w-full text-left rounded border ${theme.border} bg-slate-950 px-3 py-2 text-white focus:ring-2 ${theme.ring} flex justify-between items-center transition`}
+                >
+                  <div className="flex flex-col">
+                      <span className="font-medium text-sm">{currentModelInfo.name}</span>
+                      <span className="text-[10px] text-slate-400">{currentModelInfo.desc}</span>
+                  </div>
+                  <svg className={`w-4 h-4 text-slate-400 transition-transform ${isModelDropdownOpen ? 'rotate-180' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                </button>
+                
+                {isModelDropdownOpen && (
+                   <div className={`absolute top-full left-0 right-0 mt-1 rounded-lg border ${theme.border} bg-slate-900 shadow-2xl overflow-hidden max-h-64 overflow-y-auto`}>
+                       {AVAILABLE_MODELS.map((model) => (
+                          <div 
+                             key={model.id} 
+                             onClick={() => { setSelectedModel(model.id); setIsModelDropdownOpen(false); }}
+                             className={`px-3 py-2 cursor-pointer hover:bg-slate-800 border-b border-slate-800 last:border-0 ${selectedModel === model.id ? 'bg-slate-800' : ''}`}
+                          >
+                             <div className="flex justify-between items-center">
+                                <div>
+                                    <div className={`font-medium text-sm ${selectedModel === model.id ? 'text-sky-400' : 'text-slate-200'}`}>{model.name}</div>
+                                    <div className="text-[10px] text-slate-400">{model.desc}</div>
+                                </div>
+                                {selectedModel === model.id && <svg className="w-4 h-4 text-sky-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
+                             </div>
+                          </div>
+                       ))}
+                   </div>
+                )}
+            </div>
+
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Google Gemini API Key (Required)</label>
-              <input type="password" value={apiKeyGemini} onChange={(e) => setApiKeyGemini(e.target.value)} className={`w-full rounded border ${theme.border} bg-slate-950 px-3 py-2 text-white focus:ring-2 ${theme.ring}`} placeholder="AIza..." />
+              <label className="block text-sm font-medium text-slate-300 mb-1 flex justify-between">
+                 <span>Google Gemini API Keys (Required)</span>
+                 <span className="text-[10px] text-emerald-400 bg-emerald-900/30 px-2 py-0.5 rounded">Multi-key Auto-switch Supported</span>
+              </label>
+              <textarea 
+                  value={apiKeyGemini} 
+                  onChange={(e) => setApiKeyGemini(e.target.value)} 
+                  className={`w-full h-32 rounded border ${theme.border} bg-slate-950 px-3 py-2 text-white focus:ring-2 ${theme.ring} text-xs font-mono`} 
+                  placeholder={`AIza...\nAIza...\n(Mỗi dòng 1 key, tự động chuyển khi hết quota)`} 
+              />
             </div>
              <div>
               <label className="block text-sm font-medium text-slate-300 mb-1">OpenAI API Key (Optional)</label>
@@ -1194,6 +1257,7 @@ export default function App() {
              <div className="space-y-4 text-sm text-slate-300">
                <p>Tool này được thiết kế tối ưu cho việc làm content YouTube số lượng lớn (Industrial Scale) nhưng vẫn giữ chất lượng cao:</p>
                <ul className="list-disc ml-5 space-y-2">
+                   <li><b>Multi-Key Auto Switch:</b> Nhập nhiều API Key Gemini cùng lúc. Tool tự động chuyển key khi hết quota (Lỗi 429).</li>
                    <li><b>Đa dạng Thể loại:</b> Hỗ trợ cả Ngôn tình (tình cảm) và Phi ngôn tình (hành động, kinh dị, tiên hiệp) với phong cách viết được tùy biến riêng.</li>
                    <li><b>Consistency (Nhất quán):</b> Metadata nhân vật được lưu và truyền xuyên suốt qua các prompt.</li>
                    <li><b>Deep Content:</b> Thay vì viết một lèo, tool chia nhỏ outline và viết từng chương chi tiết.</li>
@@ -1204,7 +1268,7 @@ export default function App() {
         ) : (
              <div className="space-y-4 text-sm text-slate-300">
                 <ol className="list-decimal ml-5 space-y-3">
-                   <li><b>Cài đặt:</b> Nhập API Key. Cấu hình Tên Kênh/MC.</li>
+                   <li><b>Cài đặt:</b> Nhập API Key (Nên nhập 3-5 key để chạy mượt). Chọn Model AI mong muốn.</li>
                    <li><b>Lên ý tưởng:</b> Chọn Chế độ (Ngôn tình/Phi ngôn tình) và Thể loại cụ thể. Nhập tên sách/chủ đề. Nhấn "Tạo Kịch bản khung".</li>
                    <li><b>Viết truyện:</b> Nhấn "Viết Truyện". AI sẽ viết lần lượt từng chương với văn phong phù hợp thể loại đã chọn.</li>
                    <li><b>Kiểm định & Tối ưu:</b> Dùng tính năng "Đánh giá" để chấm điểm, sau đó "Viết lại".</li>

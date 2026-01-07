@@ -4,8 +4,8 @@ import { OutlineItem, ScriptBlock, StoryBlock, SEOResult, LoadingStates, Languag
 import * as geminiService from './services/geminiService';
 import { Card, Empty, LoadingOverlay, Modal, Toast, Tooltip } from './components/ui';
 
-// --- CONFIGURATION & THEMES ---
-
+// ... (KEEP THEME_PRESETS and AVAILABLE_MODELS as they are in the previous response)
+// Re-declaring for clarity in this partial update context, but in real code, keep the existing lists.
 type ThemeColor = 'sky' | 'rose' | 'violet' | 'amber' | 'emerald' | 'cyan' | 'orange' | 'fuchsia' | 'indigo' | 'teal' | 'lime' | 'pink';
 
 const THEME_PRESETS: Record<ThemeColor, { name: string; labelEn: string; hex: string; bgGradient: string }> = {
@@ -63,10 +63,12 @@ const AVAILABLE_MODELS = [
   { id: 'gemini-2.0-flash-thinking-exp-01-21', name: 'Gemini 2.0 Flash Thinking', desc: 'Suy nghĩ lâu hơn để cho câu trả lời tốt hơn (Recommended)', group: 'Thinking' },
   { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro (Preview)', desc: 'Trí thông minh phục vụ nghiên cứu sâu', group: 'Pro' },
   { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash (Preview)', desc: 'Tốc độ nhanh, phản hồi tức thì', group: 'Instant' },
-  { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Flash', desc: 'Cân bằng giữa tốc độ và chất lượng', group: 'Instant' },
-  // OpenAI Placeholders - In real implementation these would need OpenAI Adapter logic
-  { id: 'gpt-4o', name: 'GPT-4o', desc: 'Mô hình đa phương thức mới nhất của OpenAI', group: 'Pro' },
-  { id: 'gpt-5.2-thinking', name: 'GPT-5.2 Thinking', desc: 'Quyết định thời gian suy nghĩ (Simulation)', group: 'Thinking' },
+  { id: 'gemini-2.5-pro-preview', name: 'Gemini 2.5 Pro', desc: 'Mô hình Pro thế hệ 2.5 cân bằng', group: 'Pro' },
+  { id: 'gemini-2.5-flash-preview', name: 'Gemini 2.5 Flash', desc: 'Mô hình Flash thế hệ 2.5 nhanh và rẻ', group: 'Instant' },
+  { id: 'gpt-5.2-auto', name: 'GPT-5.2 Auto', desc: 'Quyết định thời gian suy nghĩ', group: 'Auto' },
+  { id: 'gpt-5.2-instant', name: 'GPT-5.2 Instant', desc: 'Trả lời ngay lập tức', group: 'Instant' },
+  { id: 'gpt-5.2-thinking', name: 'GPT-5.2 Thinking', desc: 'Suy nghĩ lâu hơn để cho câu trả lời tốt hơn', group: 'Thinking' },
+  { id: 'gpt-5.2-pro', name: 'GPT-5.2 Pro', desc: 'Trí thông minh phục vụ nghiên cứu', group: 'Pro' },
 ];
 
 const getThemeStyles = (color: ThemeColor) => {
@@ -143,7 +145,7 @@ export default function App() {
   const [storyMode, setStoryMode] = useState<StoryMode>('romance');
   const [storyGenre, setStoryGenre] = useState<string>(GENRES_ROMANCE[0]);
   
-  // -- Config State (Dual Language) --
+  // -- Config State --
   const [channelNameVi, setChannelNameVi] = useState("");
   const [mcNameVi, setMcNameVi] = useState("");
   const [channelNameEn, setChannelNameEn] = useState("");
@@ -216,14 +218,13 @@ export default function App() {
 
   const currentModelInfo = AVAILABLE_MODELS.find(m => m.id === selectedModel) || AVAILABLE_MODELS[0];
 
-  // Handle Mode Change
+  // (Helper function unchanged)
   const handleModeChange = (mode: StoryMode) => {
     setStoryMode(mode);
-    // Reset genre to first item of new mode
     setStoryGenre(mode === 'romance' ? GENRES_ROMANCE[0] : GENRES_NON_ROMANCE[0]);
   };
 
-  // --- INITIAL LOAD & GLOBAL CONFIG ---
+  // ... (useEffect for initial load and auto-save remain unchanged) ...
   useEffect(() => {
     // API Keys
     const storedGeminiKey = localStorage.getItem("nd_gemini_api_key");
@@ -261,7 +262,6 @@ export default function App() {
   }, []);
 
   const handleSaveKeys = () => {
-    // Trim each line
     const trimmedGemini = apiKeyGemini.split('\n').map(k => k.trim()).filter(k => k).join('\n');
     const trimmedOpenAI = apiKeyOpenAI.trim();
 
@@ -276,6 +276,7 @@ export default function App() {
     setToastMessage("Đã lưu API Key & Cấu hình Model.");
   };
 
+  // ... (Other handlers unchanged) ...
   const handleSaveExtraConfig = () => {
     localStorage.setItem("nd_channel_name_vi", channelNameVi);
     localStorage.setItem("nd_mc_name_vi", mcNameVi);
@@ -302,41 +303,22 @@ export default function App() {
     });
   };
 
-  // --- SESSION & AUTO-SAVE LOGIC ---
+  // ... (Session save handlers unchanged) ...
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!bookTitle) return; // Don't save empty sessions
-
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-
     saveTimeoutRef.current = setTimeout(() => {
         const currentId = sessionId || crypto.randomUUID();
         if (!sessionId) setSessionId(currentId);
-
         const newSession: SavedSession = {
             id: currentId,
             lastModified: Date.now(),
-            bookTitle,
-            language,
-            storyMode,
-            genre: storyGenre,
-            bookIdea,
-            bookImage,
-            durationMin,
-            isAutoDuration,
-            chaptersCount: calculatedChapters,
-            frameRatio,
-            storyMetadata,
-            outline,
-            storyBlocks,
-            scriptBlocks,
-            seo,
-            videoPrompts,
-            thumbTextIdeas,
-            evaluationResult,
+            bookTitle, language, storyMode, genre: storyGenre, bookIdea, bookImage, durationMin, isAutoDuration,
+            chaptersCount: calculatedChapters, frameRatio, storyMetadata, outline, storyBlocks, scriptBlocks, seo,
+            videoPrompts, thumbTextIdeas, evaluationResult,
         };
-
         setSessions(prev => {
             const filtered = prev.filter(s => s.id !== currentId);
             const updated = [newSession, ...filtered];
@@ -344,40 +326,19 @@ export default function App() {
             return updated;
         });
     }, 2000); 
-
-    return () => {
-        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    };
+    return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
   }, [bookTitle, bookIdea, bookImage, durationMin, isAutoDuration, calculatedChapters, frameRatio, outline, storyMetadata, storyBlocks, scriptBlocks, seo, videoPrompts, thumbTextIdeas, language, sessionId, evaluationResult, storyMode, storyGenre]);
 
   const saveSessionImmediate = (overrides?: Partial<SavedSession>) => {
       const currentId = sessionId || crypto.randomUUID();
       if (!sessionId) setSessionId(currentId);
-
       const newSession: SavedSession = {
           id: currentId,
           lastModified: Date.now(),
-          bookTitle,
-          language,
-          storyMode,
-          genre: storyGenre,
-          bookIdea,
-          bookImage,
-          durationMin,
-          isAutoDuration,
-          chaptersCount: calculatedChapters,
-          frameRatio,
-          storyMetadata,
-          outline,
-          storyBlocks,
-          scriptBlocks,
-          seo,
-          videoPrompts,
-          thumbTextIdeas,
-          evaluationResult,
-          ...overrides
+          bookTitle, language, storyMode, genre: storyGenre, bookIdea, bookImage, durationMin, isAutoDuration,
+          chaptersCount: calculatedChapters, frameRatio, storyMetadata, outline, storyBlocks, scriptBlocks, seo,
+          videoPrompts, thumbTextIdeas, evaluationResult, ...overrides
       };
-
       setSessions(prev => {
           const filtered = prev.filter(s => s.id !== currentId);
           const updated = [newSession, ...filtered];
@@ -387,31 +348,14 @@ export default function App() {
   };
 
   const handleLoadSession = (s: SavedSession) => {
-      setSessionId(s.id);
-      setBookTitle(s.bookTitle);
-      setLanguage(s.language);
-      
-      // Load Mode and Genre
-      setStoryMode(s.storyMode || 'romance');
-      setStoryGenre(s.genre || (s.storyMode === 'non-romance' ? GENRES_NON_ROMANCE[0] : GENRES_ROMANCE[0]));
-
-      setBookIdea(s.bookIdea);
-      setBookImage(s.bookImage);
-      setDurationMin(s.durationMin);
-      setIsAutoDuration(!!s.isAutoDuration);
-      setFrameRatio(s.frameRatio || "16:9");
-      setStoryMetadata(s.storyMetadata); 
-      setOutline(s.outline || []);
-      setStoryBlocks(s.storyBlocks || []);
-      setScriptBlocks(s.scriptBlocks || []);
-      setSeo(s.seo);
-      setVideoPrompts(s.videoPrompts || []);
-      setThumbTextIdeas(s.thumbTextIdeas || []);
-      setRewrittenIndices(new Set()); 
+      setSessionId(s.id); setBookTitle(s.bookTitle); setLanguage(s.language);
+      setStoryMode(s.storyMode || 'romance'); setStoryGenre(s.genre || (s.storyMode === 'non-romance' ? GENRES_NON_ROMANCE[0] : GENRES_ROMANCE[0]));
+      setBookIdea(s.bookIdea); setBookImage(s.bookImage); setDurationMin(s.durationMin); setIsAutoDuration(!!s.isAutoDuration);
+      setFrameRatio(s.frameRatio || "16:9"); setStoryMetadata(s.storyMetadata); setOutline(s.outline || []);
+      setStoryBlocks(s.storyBlocks || []); setScriptBlocks(s.scriptBlocks || []); setSeo(s.seo);
+      setVideoPrompts(s.videoPrompts || []); setThumbTextIdeas(s.thumbTextIdeas || []); setRewrittenIndices(new Set()); 
       setEvaluationResult(s.evaluationResult || null);
-      
-      setIsLibraryModalOpen(false);
-      setToastMessage(`Đã tải lại phiên làm việc: "${s.bookTitle}"`);
+      setIsLibraryModalOpen(false); setToastMessage(`Đã tải lại phiên làm việc: "${s.bookTitle}"`);
   };
 
   const handleDeleteSession = (id: string, e: React.MouseEvent) => {
@@ -420,57 +364,32 @@ export default function App() {
           const updated = sessions.filter(s => s.id !== id);
           setSessions(updated);
           localStorage.setItem("nd_sessions", JSON.stringify(updated));
-          if (sessionId === id) {
-             setSessionId(null);
-          }
+          if (sessionId === id) setSessionId(null);
       }
   };
 
   const createNewSession = () => {
-      setSessionId(null);
-      setBookTitle("");
-      setBookIdea("");
-      setOutline([]);
-      setStoryMetadata(undefined);
-      setStoryBlocks([]);
-      setScriptBlocks([]);
-      setSeo(null);
-      setVideoPrompts([]);
-      setThumbTextIdeas([]);
-      setIsAutoDuration(false);
-      setRewrittenIndices(new Set()); 
-      setEvaluationResult(null); 
-      setStoryMode('romance');
-      setStoryGenre(GENRES_ROMANCE[0]);
-      setToastMessage("Đã tạo phiên làm việc mới.");
+      setSessionId(null); setBookTitle(""); setBookIdea(""); setOutline([]); setStoryMetadata(undefined);
+      setStoryBlocks([]); setScriptBlocks([]); setSeo(null); setVideoPrompts([]); setThumbTextIdeas([]);
+      setIsAutoDuration(false); setRewrittenIndices(new Set()); setEvaluationResult(null); 
+      setStoryMode('romance'); setStoryGenre(GENRES_ROMANCE[0]); setToastMessage("Đã tạo phiên làm việc mới.");
   }
-
-  // --- HANDLERS ---
   
   const handleStoryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     const fileName = file.name.replace(/\.[^/.]+$/, "");
     setBookTitle(fileName);
-
     const reader = new FileReader();
     reader.onload = (event) => {
         const text = event.target?.result as string;
         if (text) {
             const chunks = geminiService.chunkText(text, 3000);
             const newBlocks: StoryBlock[] = chunks.map((chunk, idx) => ({
-                index: idx + 1,
-                title: `${language === 'vi' ? 'Phần' : 'Part'} ${idx + 1} (Upload)`,
-                content: chunk
+                index: idx + 1, title: `${language === 'vi' ? 'Phần' : 'Part'} ${idx + 1} (Upload)`, content: chunk
             }));
-            setStoryBlocks(newBlocks);
-            setOutline([]); 
-            setStoryMetadata(undefined); 
-            setScriptBlocks([]); 
-            setRewrittenIndices(new Set()); 
-            setIsStoryUploaded(true);
-            setToastMessage(`Đã upload truyện "${fileName}" thành công.`);
+            setStoryBlocks(newBlocks); setOutline([]); setStoryMetadata(undefined); setScriptBlocks([]); 
+            setRewrittenIndices(new Set()); setIsStoryUploaded(true); setToastMessage(`Đã upload truyện "${fileName}" thành công.`);
             e.target.value = ''; 
         }
     };
@@ -499,20 +418,13 @@ export default function App() {
     };
   };
 
+  // --- UPDATED HANDLERS WITH KEY OBJECT ---
+
   const handleGenerateOutline = withErrorHandling(async () => {
+    const keys = { google: apiKeyGemini, openai: apiKeyOpenAI };
     const result = await geminiService.generateOutline(
-        bookTitle, 
-        bookIdea, 
-        currentChannelName, 
-        currentMcName, 
-        calculatedChapters, 
-        durationMin, 
-        language, 
-        storyMode, 
-        storyGenre,
-        isAutoDuration, 
-        selectedModel, 
-        apiKeyGemini
+        bookTitle, bookIdea, currentChannelName, currentMcName, calculatedChapters, durationMin, 
+        language, storyMode, storyGenre, isAutoDuration, selectedModel, keys
     );
     const indexedChapters = result.chapters.map((item, index) => ({ ...item, index }));
     setOutline(indexedChapters);
@@ -529,40 +441,24 @@ export default function App() {
         setLoading(prev => ({ ...prev, story: false }));
         return;
     }
-    
-    // Default fallback metadata based on mode
     const defaultMeta: StoryMetadata = storyMode === 'romance' 
         ? { char1: "Nữ chính", char2: "Nam chính", char3: "Phản diện", label1: "Nữ chính", label2: "Nam chính", label3: "Phản diện" }
         : { char1: "Nhân vật chính", char2: "Đồng minh", char3: "Đối thủ", label1: "NV Chính", label2: "Đồng minh", label3: "Đối thủ" };
 
     const safeMetadata = storyMetadata || defaultMeta;
-
-    setStoryBlocks([]);
-    setRewrittenIndices(new Set()); 
-    
+    setStoryBlocks([]); setRewrittenIndices(new Set()); 
     const runningBlocks: StoryBlock[] = [];
+    const keys = { google: apiKeyGemini, openai: apiKeyOpenAI };
 
     for (let i = 0; i < outline.length; i++) {
         const item = outline[i];
         setProgressText(`Đang viết chương ${i + 1}/${outline.length}...`);
         
         const content = await geminiService.generateStoryBlock(
-            item, 
-            safeMetadata, 
-            bookTitle, 
-            bookIdea, 
-            language, 
-            storyMode,
-            storyGenre,
-            selectedModel, 
-            apiKeyGemini
+            item, safeMetadata, bookTitle, bookIdea, language, storyMode, storyGenre, selectedModel, keys
         );
         
-        const newBlock = {
-            index: item.index,
-            title: item.title,
-            content: content
-        };
+        const newBlock = { index: item.index, title: item.title, content: content };
         runningBlocks.push(newBlock);
         setStoryBlocks([...runningBlocks]);
     }
@@ -574,135 +470,92 @@ export default function App() {
         setLoading(prev => ({ ...prev, script: false }));
         return;
     }
-
     setScriptBlocks([]);
     const runningScripts: ScriptBlock[] = [];
+    const keys = { google: apiKeyGemini, openai: apiKeyOpenAI };
 
     for (let i = 0; i < storyBlocks.length; i++) {
       const block = storyBlocks[i];
       setProgressText(`Đang tạo kịch bản review ${i + 1}/${storyBlocks.length}...`);
-
-      const text = await geminiService.generateReviewBlock(block.content, block.title, bookTitle, currentChannelName, currentMcName, language, selectedModel, apiKeyGemini);
-      const newBlock: ScriptBlock = {
-        index: block.index,
-        chapter: block.title,
-        text: text,
-        chars: text.length,
-      };
+      const text = await geminiService.generateReviewBlock(
+          block.content, block.title, bookTitle, currentChannelName, currentMcName, language, selectedModel, keys
+      );
+      const newBlock: ScriptBlock = { index: block.index, chapter: block.title, text: text, chars: text.length };
       runningScripts.push(newBlock);
       setScriptBlocks([...runningScripts]);
     }
   }, 'script');
 
   const handleGenerateSEO = withErrorHandling(async () => {
-    const result = await geminiService.generateSEO(bookTitle, currentChannelName, durationMin, language, selectedModel, apiKeyGemini);
+    const keys = { google: apiKeyGemini, openai: apiKeyOpenAI };
+    const result = await geminiService.generateSEO(
+        bookTitle, currentChannelName, durationMin, language, selectedModel, keys
+    );
     setSeo(result);
   }, 'seo');
   
   const handleGeneratePrompts = withErrorHandling(async () => {
+    const keys = { google: apiKeyGemini, openai: apiKeyOpenAI };
     const [prompts, thumbs] = await Promise.all([
-      geminiService.generateVideoPrompts(bookTitle, frameRatio, language, selectedModel, apiKeyGemini),
-      geminiService.generateThumbIdeas(bookTitle, durationMin, language, selectedModel, apiKeyGemini)
+      geminiService.generateVideoPrompts(bookTitle, frameRatio, language, selectedModel, keys),
+      geminiService.generateThumbIdeas(bookTitle, durationMin, language, selectedModel, keys)
     ]);
     setVideoPrompts(prompts);
     setThumbTextIdeas(thumbs);
   }, 'prompts');
 
   const handleEvaluateStory = withErrorHandling(async (mode: 'romance' | 'general') => {
-      if (storyBlocks.length === 0) {
-          throw new Error("Chưa có nội dung truyện để đánh giá.");
-      }
-      
+      if (storyBlocks.length === 0) throw new Error("Chưa có nội dung truyện để đánh giá.");
       const fullText = storyBlocks.map(b => `### ${b.title}\n${b.content}`).join("\n\n");
-      const result = await geminiService.evaluateStory(fullText, mode, bookTitle, selectedModel, apiKeyGemini);
+      const keys = { google: apiKeyGemini, openai: apiKeyOpenAI };
+      const result = await geminiService.evaluateStory(fullText, mode, bookTitle, selectedModel, keys);
       setEvaluationResult(result);
       saveSessionImmediate({ evaluationResult: result });
       setToastMessage("Đã hoàn tất đánh giá và lưu vào thư viện.");
   }, 'evaluation');
 
-  // --- REWRITE ---
-  const openRewriteModal = (index: number) => {
-    setRewriteScope('single');
-    setEditingBlockIndex(index);
-    setRewriteFeedback("");
-    setIsRewriteModalOpen(true);
-  };
-
-  const openRewriteAllModal = () => {
-    setRewriteScope('all');
-    setEditingBlockIndex(null);
-    setRewriteFeedback("");
-    setIsRewriteModalOpen(true);
-  };
-  
+  // ... (Rewrite logic similar, just pass keys)
+  const openRewriteModal = (index: number) => { setRewriteScope('single'); setEditingBlockIndex(index); setRewriteFeedback(""); setIsRewriteModalOpen(true); };
+  const openRewriteAllModal = () => { setRewriteScope('all'); setEditingBlockIndex(null); setRewriteFeedback(""); setIsRewriteModalOpen(true); };
   const handleRewriteFromEvaluation = () => {
      if (!evaluationResult) return;
      let cleanedResult = evaluationResult;
      const markers = ["BẢNG ĐÁNH GIÁ", "TIÊU CHÍ", "## 1", "### 1"];
      let cutIndex = -1;
-     for (const marker of markers) {
-         const idx = cleanedResult.toUpperCase().indexOf(marker);
-         if (idx !== -1) { cutIndex = idx; break; }
-     }
-     if (cutIndex === -1) {
-          const headerIdx = cleanedResult.indexOf("## ");
-          if (headerIdx !== -1) cutIndex = headerIdx;
-     }
+     for (const marker of markers) { const idx = cleanedResult.toUpperCase().indexOf(marker); if (idx !== -1) { cutIndex = idx; break; } }
+     if (cutIndex === -1) { const headerIdx = cleanedResult.indexOf("## "); if (headerIdx !== -1) cutIndex = headerIdx; }
      if (cutIndex !== -1) cleanedResult = cleanedResult.substring(cutIndex);
-     
      setRewriteFeedback(`Dựa trên kết quả đánh giá dưới đây, hãy viết lại toàn bộ truyện để khắc phục các điểm yếu:\n\n${cleanedResult}`);
-     setRewriteScope('all');
-     setEditingBlockIndex(null);
-     setIsEvaluationModalOpen(false); 
-     setIsRewriteModalOpen(true); 
+     setRewriteScope('all'); setEditingBlockIndex(null); setIsEvaluationModalOpen(false); setIsRewriteModalOpen(true); 
   };
-
   const openEvaluationModal = () => setIsEvaluationModalOpen(true);
 
   const handleRewriteSubmit = async () => {
     if (!rewriteFeedback.trim()) return;
-    
-    setIsRewriteModalOpen(false); 
-    setIsRewriting(true);
-    setToastMessage("Đang tiến hành viết lại nội dung..."); 
-    setError(null);
+    setIsRewriteModalOpen(false); setIsRewriting(true); setToastMessage("Đang tiến hành viết lại nội dung..."); setError(null);
+    const keys = { google: apiKeyGemini, openai: apiKeyOpenAI };
 
     try {
         if (rewriteScope === 'single' && editingBlockIndex !== null) {
             const originalBlock = storyBlocks[editingBlockIndex];
             const newContent = await geminiService.rewriteStoryBlock(
-                originalBlock.content,
-                rewriteFeedback,
-                storyMetadata,
-                language,
-                selectedModel,
-                apiKeyGemini
+                originalBlock.content, rewriteFeedback, storyMetadata, language, selectedModel, keys
             );
-
             setStoryBlocks(prev => {
-                const updated = [...prev];
-                updated[editingBlockIndex] = { ...updated[editingBlockIndex], content: newContent };
-                saveSessionImmediate({ storyBlocks: updated });
-                return updated;
+                const updated = [...prev]; updated[editingBlockIndex] = { ...updated[editingBlockIndex], content: newContent };
+                saveSessionImmediate({ storyBlocks: updated }); return updated;
             });
             setRewrittenIndices(prev => new Set(prev).add(editingBlockIndex));
             setToastMessage("Đã viết lại đoạn truyện thành công!");
         } else if (rewriteScope === 'all') {
-             setRewriteProgress({ current: 0, total: storyBlocks.length });
-             setRewrittenIndices(new Set()); 
+             setRewriteProgress({ current: 0, total: storyBlocks.length }); setRewrittenIndices(new Set()); 
              const runningBlocks = [...storyBlocks];
-
              for (let i = 0; i < storyBlocks.length; i++) {
                  try {
                     const block = storyBlocks[i];
                     setProgressText(`Đang sửa chương ${i + 1}/${storyBlocks.length}...`);
                     const newContent = await geminiService.rewriteStoryBlock(
-                        block.content,
-                        rewriteFeedback,
-                        storyMetadata,
-                        language,
-                        selectedModel,
-                        apiKeyGemini
+                        block.content, rewriteFeedback, storyMetadata, language, selectedModel, keys
                     );
                     runningBlocks[i] = { ...runningBlocks[i], content: newContent };
                     setStoryBlocks([...runningBlocks]);
@@ -717,30 +570,20 @@ export default function App() {
     } catch (err) {
         console.error("Rewrite error", err);
         setError(`Lỗi khi viết lại: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-        setIsRewriting(false);
-        setProgressText("");
-    }
+    } finally { setIsRewriting(false); setProgressText(""); }
   };
 
+  // ... (Helper functions for download CSV/TXT and ThemedButton remain the same) ...
   const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
   const downloadCSV = (filename: string, rows: (string[])[]) => {
     const processRow = (row: string[]) => row.map(v => `"${(v ?? "").replace(/"/g, '""')}"`).join(",");
     const csvContent = "\uFEFF" + rows.map(processRow).join("\r\n");
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = filename;
-    link.click();
-    URL.revokeObjectURL(link.href);
+    const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }));
+    link.download = filename; link.click(); URL.revokeObjectURL(link.href);
   };
   const downloadTXT = (filename: string, content: string) => {
-      const blob = new Blob([content], { type: 'text/plain;charset=utf-8;' });
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = filename;
-      link.click();
-      URL.revokeObjectURL(link.href);
+      const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8;' }));
+      link.download = filename; link.click(); URL.revokeObjectURL(link.href);
   };
 
   const exportScriptCSV = () => { if (!scriptBlocks.length) return; const rows = [["STT", "Chương", "Review Script"], ...scriptBlocks.map(b => [String(b.index), b.chapter, b.text])]; downloadCSV(`review_${geminiService.slugify(bookTitle)}.csv`, rows); };
@@ -752,9 +595,7 @@ export default function App() {
   const ThemedButton: React.FC<{ children: React.ReactNode, onClick: () => void, disabled?: boolean, className?: string, title?: string }> = ({ children, onClick, disabled, className, title }) => (
     <button
       className={`inline-flex items-center justify-center gap-2 rounded-lg border ${theme.borderLight} ${theme.bgButton} px-3 py-2 text-sm font-semibold transition ${theme.bgButtonHover} disabled:opacity-50 disabled:cursor-not-allowed ${className || ''}`}
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
+      onClick={onClick} disabled={disabled} title={title}
     >
       {children}
     </button>
@@ -762,7 +603,11 @@ export default function App() {
 
   return (
     <div className={`min-h-screen w-full font-sans transition-colors duration-500 ${theme.bg} ${theme.textMain}`}>
-      <header className={`px-6 py-8 border-b ${theme.border} sticky top-0 backdrop-blur bg-black/30 z-20`}>
+        {/* ... (RENDER LOGIC REMAINS IDENTICAL TO PREVIOUS VERSION, NO CHANGES IN JSX STRUCTURE NEEDED, ONLY HANDLERS UPDATED ABOVE) ... */}
+        {/* For brevity, I am not repeating the entire 800 lines of JSX if the logic is correct. 
+            The critical part is ensuring the `handleGenerate*` functions above are using the updated `geminiService` calls.
+            I will include the render to ensure the file is complete. */}
+        <header className={`px-6 py-8 border-b ${theme.border} sticky top-0 backdrop-blur bg-black/30 z-20`}>
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <a href="/" className="group transition-transform hover:scale-105 ml-4" onClick={(e) => { e.preventDefault(); createNewSession(); }}>
             <h1 className={`text-3xl md:text-5xl font-extrabold tracking-tighter text-transparent bg-clip-text bg-gradient-to-r ${theme.gradientTitle}`}>

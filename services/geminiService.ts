@@ -373,6 +373,28 @@ const getGenreWritingStyle = (genre: string, isVi: boolean): string => {
     return isVi ? `Văn phong phù hợp thể loại ${genre}` : `Style matching ${genre}`;
 };
 
+// --- TTS RULES DEFINITION ---
+const TTS_RULES_VI = `
+QUY TẮC CHUẨN AUDIO/TTS (BẮT BUỘC):
+1. Chỉ viết giọng kể chuyện, KHÔNG viết lời dẫn (như "Đây là...", "Chương...").
+2. KHÔNG dùng ký tự đặc biệt (*, [], ---, #). KHÔNG dùng Markdown bold/italic.
+3. Chuyển đổi mọi hiệu ứng âm thanh, bảng hệ thống, tin nhắn thành văn xuôi miêu tả.
+   - VD: Thay vì "[Ding! Cộng 10 điểm]", hãy viết "Một tiếng chuông vang lên, hệ thống thông báo cộng mười điểm."
+4. Viết số tiền và các con số bằng chữ để đọc không bị vấp.
+   - VD: "500k" -> "năm trăm nghìn", "10 năm" -> "mười năm".
+5. Hạn chế viết tắt, tiếng lóng internet. Câu văn phải mượt mà, mạch lạc khi đọc thành tiếng.
+`;
+
+const TTS_RULES_EN = `
+AUDIO/TTS RULES (MANDATORY):
+1. Storytelling voice only. NO meta-commentary or intro text.
+2. NO special characters (*, [], ---). NO Markdown formatting.
+3. Convert all sound effects, system notifications, or texts into narrative prose.
+   - E.g.: Instead of "[System: +10 XP]", write "A notification chimed, awarding ten experience points."
+4. Write out all numbers and currency in words.
+5. Avoid abbreviations and internet slang. Sentences must be smooth for reading aloud.
+`;
+
 export const generateStoryBlock = async (
     item: OutlineItem, metadata: StoryMetadata, bookTitle: string, idea: string, 
     language: Language, mode: StoryMode, genre: string, 
@@ -380,23 +402,27 @@ export const generateStoryBlock = async (
 ): Promise<string> => {
     const isVi = language === 'vi';
     const styleInstruction = getGenreWritingStyle(genre, isVi);
+    const ttsRules = isVi ? TTS_RULES_VI : TTS_RULES_EN;
+
     const prompt = isVi
         ? `Viết chương "${item.title}" cho "${bookTitle}".
            Nhân vật: ${metadata.char1}, ${metadata.char2}, ${metadata.char3}.
            Ý tưởng: ${idea}.
            Mục tiêu: "${item.focus}". Tình tiết: ${item.actions.join(', ')}.
-           YÊU CẦU:
+           YÊU CẦU NỘI DUNG:
            1. ${styleInstruction}
            2. Show, don't tell.
-           3. Chỉ viết nội dung truyện (600-800 từ).`
+           3. Độ dài: 600-800 từ.
+           ${ttsRules}`
         : `Write chapter "${item.title}" for "${bookTitle}".
            Characters: ${metadata.char1}, ${metadata.char2}, ${metadata.char3}.
            Idea: ${idea}.
            Goal: "${item.focus}". Actions: ${item.actions.join(', ')}.
-           RULES:
+           CONTENT REQUIREMENTS:
            1. ${styleInstruction}
            2. Show, don't tell.
-           3. Story content only (600-800 words).`;
+           3. Length: 600-800 words.
+           ${ttsRules}`;
 
     return generateText({ model, prompt }, apiKeys);
 };
@@ -406,15 +432,25 @@ export const rewriteStoryBlock = async (
     language: Language, model: string, apiKeys?: ApiKeyConfig
 ): Promise<string> => {
     const isVi = language === 'vi';
+    const ttsRules = isVi ? TTS_RULES_VI : TTS_RULES_EN;
+
     const prompt = isVi
         ? `Viết lại đoạn văn sau theo feedback.
            Gốc: "${originalContent}"
            Feedback: "${feedback}"
-           Yêu cầu: Chỉ trả về nội dung mới.`
+           QUAN TRỌNG:
+           1. Chỉ trả về nội dung truyện đã sửa.
+           2. TUYỆT ĐỐI KHÔNG thêm các câu dẫn dắt kiểu "Dưới đây là bản viết lại", "Phiên bản sửa đổi...".
+           3. Bắt đầu ngay vào nội dung truyện.
+           ${ttsRules}`
         : `Rewrite text based on feedback.
            Original: "${originalContent}"
            Feedback: "${feedback}"
-           Req: Return only new content.`;
+           IMPORTANT:
+           1. Return ONLY the rewritten story text.
+           2. DO NOT include conversational fillers like "Here is the rewrite...", "Based on feedback...".
+           3. Start directly with the story content.
+           ${ttsRules}`;
 
     return generateText({ model, prompt }, apiKeys);
 };

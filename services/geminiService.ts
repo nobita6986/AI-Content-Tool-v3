@@ -531,7 +531,13 @@ export const evaluateStory = async (
     fullStoryText: string, mode: 'romance' | 'general', bookTitle: string, 
     model: string, apiKeys?: ApiKeyConfig
 ): Promise<string> => {
-    const prompt = `Đánh giá chi tiết truyện "${bookTitle}" theo thang điểm 10. Nội dung:\n"${fullStoryText.substring(0, 10000)}..."`;
+    const prompt = `Đánh giá chi tiết toàn bộ nội dung truyện "${bookTitle}" dưới đây theo thang điểm 10.
+    
+    NỘI DUNG TRUYỆN:
+    """
+    ${fullStoryText}
+    """`;
+    
     return generateText({ model, prompt }, apiKeys);
 };
 

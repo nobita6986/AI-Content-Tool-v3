@@ -199,7 +199,7 @@ export default function App() {
   const [thumbTextIdeas, setThumbTextIdeas] = useState<string[]>([]);
 
   const [loading, setLoading] = useState<LoadingStates>(INITIAL_LOADING_STATES);
-  const [progressText, setProgressText] = useState<string>("");
+  const [progressText, setProgressText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   
   const [isStoryUploaded, setIsStoryUploaded] = useState(false);
@@ -1206,7 +1206,7 @@ export default function App() {
          )}
       </Modal>
 
-      <Modal isOpen={isRewriteModalOpen} onClose={() => setIsRewriteModalOpen(false)} title="Sửa nội dung">
+      <Modal isOpen={isRewriteModalOpen} onClose={() => setIsRewriteModalOpen(false)} title="Sửa nội dung" maxWidth="max-w-3xl">
          <div className="space-y-4">
              <div className="text-sm text-slate-300 bg-slate-950 p-3 rounded border border-slate-800">
                 {rewriteScope === 'single' ? (
@@ -1222,7 +1222,7 @@ export default function App() {
                     value={rewriteFeedback} 
                     onChange={(e) => setRewriteFeedback(e.target.value)} 
                     placeholder="VD: Viết lại đoạn này kịch tính hơn. Thêm miêu tả nội tâm nhân vật..." 
-                    className={`w-full h-32 rounded border ${theme.border} bg-slate-950 px-3 py-2 text-white focus:ring-2 ${theme.ring}`} 
+                    className={`w-full h-80 rounded border ${theme.border} bg-slate-950 px-3 py-2 text-white focus:ring-2 ${theme.ring}`} 
                 />
              </div>
              <div className="flex justify-end gap-2 pt-2">
@@ -1234,7 +1234,7 @@ export default function App() {
          </div>
       </Modal>
 
-      <Modal isOpen={isEvaluationModalOpen} onClose={() => setIsEvaluationModalOpen(false)} title="Đánh giá & Chấm điểm truyện">
+      <Modal isOpen={isEvaluationModalOpen} onClose={() => setIsEvaluationModalOpen(false)} title="Đánh giá & Chấm điểm truyện" maxWidth="max-w-4xl">
           {!evaluationResult ? (
               <div className="space-y-4 text-center py-6">
                   {loading.evaluation ? (
